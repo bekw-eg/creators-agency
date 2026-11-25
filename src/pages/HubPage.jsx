@@ -83,13 +83,20 @@ export default function HubPage() {
 
           <div className="flex items-center gap-2">
             <a
-              href={DEVELOPER_INFO.githubUrl}
+              href={DEVELOPER_INFO.instagramUrl}
               target="_blank"
               rel="noreferrer"
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#FFFFFF] hover:bg-[#F5F5F5] text-[#111111] text-xs font-medium border border-[#E5E5E5] transition"
             >
-              <CodeBracketIcon className="w-4 h-4 text-[#666666]" />
-              <span>GitHub</span>
+              <span>Instagram</span>
+            </a>
+            <a
+              href={DEVELOPER_INFO.whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#FFFFFF] hover:bg-[#F5F5F5] text-[#111111] text-xs font-medium border border-[#E5E5E5] transition"
+            >
+              <span>WhatsApp</span>
             </a>
             <a
               href={DEVELOPER_INFO.telegramUrl}
@@ -98,7 +105,7 @@ export default function HubPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[#111111] hover:bg-[#262626] text-white text-xs font-medium transition"
             >
               <PaperAirplaneIcon className="w-3.5 h-3.5" />
-              <span>Связаться</span>
+              <span>Telegram ({DEVELOPER_INFO.telegramHandle})</span>
             </a>
           </div>
         </div>
@@ -186,12 +193,39 @@ export default function HubPage() {
                 </div>
               </div>
 
-              <div className="px-5 py-3.5 flex items-center justify-between text-xs text-[#666666]">
-                <span className="flex items-center gap-1.5">
-                  <MapPinIcon className="w-4 h-4 text-[#111111]" />
-                  <span>{DEVELOPER_INFO.city}</span>
-                </span>
-                <span className="font-mono text-[#111111]">Telegram: {DEVELOPER_INFO.telegramHandle}</span>
+              <div className="px-5 py-3.5 space-y-2.5 text-xs text-[#666666]">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <MapPinIcon className="w-4 h-4 text-[#111111]" />
+                    <span>{DEVELOPER_INFO.city}</span>
+                  </span>
+                  <a
+                    href={DEVELOPER_INFO.telegramUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[#111111] hover:underline"
+                  >
+                    Tg: {DEVELOPER_INFO.telegramHandle}
+                  </a>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-[#E5E5E5] text-[11px]">
+                  <a
+                    href={DEVELOPER_INFO.whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[#111111] hover:underline"
+                  >
+                    WA: {DEVELOPER_INFO.whatsappHandle}
+                  </a>
+                  <a
+                    href={DEVELOPER_INFO.instagramUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[#111111] hover:underline"
+                  >
+                    Inst: @{DEVELOPER_INFO.instagramHandle}
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -379,14 +413,32 @@ export default function HubPage() {
                   Заказать разработку сайта в {DEVELOPER_INFO.name}
                 </h2>
                 <p className="text-sm text-[#666666] mt-1">
-                  Оставьте контакты для оценки сроков и сметы или напишите в Telegram{' '}
+                  Оставьте контакты для оценки сроков и сметы или напишите нам:{' '}
                   <a
                     href={DEVELOPER_INFO.telegramUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[#111111] underline font-medium"
                   >
-                    {DEVELOPER_INFO.telegramHandle}
+                    Telegram {DEVELOPER_INFO.telegramHandle}
+                  </a>
+                  ,{' '}
+                  <a
+                    href={DEVELOPER_INFO.whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#111111] underline font-medium"
+                  >
+                    WhatsApp {DEVELOPER_INFO.whatsappHandle}
+                  </a>
+                  {' '}или в{' '}
+                  <a
+                    href={DEVELOPER_INFO.instagramUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#111111] underline font-medium"
+                  >
+                    Instagram @{DEVELOPER_INFO.instagramHandle}
                   </a>
                 </p>
               </div>
@@ -521,22 +573,30 @@ export default function HubPage() {
               © {new Date().getFullYear()} {DEVELOPER_INFO.name} • Digital Agency • {DEVELOPER_INFO.tagline}
             </span>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             <a
               href={DEVELOPER_INFO.telegramUrl}
               target="_blank"
               rel="noreferrer"
               className="hover:text-[#111111] transition"
             >
-              Telegram: {DEVELOPER_INFO.telegramHandle}
+              Tg: {DEVELOPER_INFO.telegramHandle}
             </a>
             <a
-              href={DEVELOPER_INFO.githubUrl}
+              href={DEVELOPER_INFO.whatsappUrl}
               target="_blank"
               rel="noreferrer"
               className="hover:text-[#111111] transition"
             >
-              GitHub: {DEVELOPER_INFO.githubHandle}
+              WA: {DEVELOPER_INFO.whatsappHandle}
+            </a>
+            <a
+              href={DEVELOPER_INFO.instagramUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-[#111111] transition"
+            >
+              Inst: @{DEVELOPER_INFO.instagramHandle}
             </a>
           </div>
         </div>

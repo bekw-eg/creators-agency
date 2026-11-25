@@ -221,47 +221,38 @@ export default function ShowcaseBar() {
               </div>
             </div>
 
-            {/* Контакты и быстрые кнопки */}
+            {/* Контакты команды CREATORS BY EARTH */}
             <div className="mt-6 space-y-2.5">
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <a
                   href={DEVELOPER_INFO.telegramUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-neutral-200 text-[#111111] font-medium text-xs transition"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-neutral-200 text-[#111111] font-medium text-xs transition"
                 >
                   <PaperAirplaneIcon className="w-4 h-4" />
-                  <span>Связаться в Telegram ({DEVELOPER_INFO.telegramHandle})</span>
+                  <span>Telegram ({DEVELOPER_INFO.telegramHandle})</span>
                   <ArrowTopRightOnSquareIcon className="w-4 h-4" />
                 </a>
 
-                <button
-                  type="button"
-                  onClick={handleCopyTelegram}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-[#1A1A1A] hover:bg-[#262626] text-neutral-200 text-xs font-medium border border-[#262626] transition"
+                <a
+                  href={DEVELOPER_INFO.whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#1F1F1F] hover:bg-[#2A2A2A] text-white font-medium text-xs border border-[#333333] transition"
                 >
-                  {copiedTelegram ? (
-                    <>
-                      <CheckIcon className="w-4 h-4 text-white" />
-                      <span>Скопировано</span>
-                    </>
-                  ) : (
-                    <>
-                      <ClipboardDocumentIcon className="w-4 h-4 text-neutral-400" />
-                      <span>Копировать</span>
-                    </>
-                  )}
-                </button>
+                  <span>WhatsApp ({DEVELOPER_INFO.whatsappHandle})</span>
+                  <ArrowTopRightOnSquareIcon className="w-4 h-4 text-neutral-400" />
+                </a>
               </div>
 
               <a
-                href={DEVELOPER_INFO.githubUrl}
+                href={DEVELOPER_INFO.instagramUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#181818] hover:bg-[#222222] text-neutral-200 font-medium text-xs border border-[#262626] transition"
               >
-                <CodeBracketIcon className="w-4 h-4 text-neutral-400" />
-                <span>GitHub команды: {DEVELOPER_INFO.githubHandle}</span>
+                <span>Instagram: @{DEVELOPER_INFO.instagramHandle}</span>
                 <ArrowTopRightOnSquareIcon className="w-4 h-4 text-neutral-500" />
               </a>
             </div>
