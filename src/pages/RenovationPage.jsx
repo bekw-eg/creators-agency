@@ -197,7 +197,7 @@ export default function RenovationPage() {
             <div className="lg:col-span-5">
               <div className="rounded-md overflow-hidden border border-[#E2E8F0] bg-[#FFFFFF]">
                 <img
-                  src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80"
+                  src="/renovation-interior.jpg"
                   alt="Готовый ремонт квартиры в Астане"
                   className="w-full h-72 object-cover"
                 />

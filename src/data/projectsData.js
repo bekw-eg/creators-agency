@@ -118,7 +118,7 @@ export const SHOWCASE_PROJECTS = [
     accentColor: '#1D4ED8',
     bgPreview: '#F4F5F7',
     badgeText: 'Construction & Engineering',
-    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80',
+    image: '/renovation-interior.jpg',
     features: [
       'Калькулятор сметы (30–200 м²) и сроков',
       'Интерактивный слайдер «До / После»',
@@ -138,7 +138,7 @@ export const SHOWCASE_PROJECTS = [
     accentColor: '#9A7B4F',
     bgPreview: '#F8F8F6',
     badgeText: 'E-Commerce & Lighting',
-    image: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1000&q=80',
+    image: '/lighting-store.jpg',
     features: [
       'Каталог из 10 моделей с фильтрами',
       'Сортировка и паспорт характеристик',

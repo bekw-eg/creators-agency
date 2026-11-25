@@ -11,7 +11,7 @@ export const LIGHTING_PRODUCTS = [
     popularity: 99,
     inStock: true,
     badge: 'Хит продаж',
-    image: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=800&q=80',
+    image: '/lighting-store.jpg',
     description: 'Двухуровневая кольцевая светодиодная люстра из анодированной латуни с матовым силиконовым рассеивателем и пультом управления температурой света.',
     specs: {
       power: '78 Вт (3900 Люмен)',

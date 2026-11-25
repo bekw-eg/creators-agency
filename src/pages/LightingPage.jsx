@@ -249,7 +249,7 @@ export default function LightingPage() {
           <div className="lg:col-span-5">
             <div className="rounded-md overflow-hidden border border-[#E5E5E0] bg-[#FFFFFF]">
               <img
-                src="https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1000&q=80"
+                src="/lighting-store.jpg"
                 alt="Дизайнерские люстры LUMEN HOME"
                 className="w-full h-80 object-cover"
               />
