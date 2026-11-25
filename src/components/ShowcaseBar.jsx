@@ -22,7 +22,7 @@ export default function ShowcaseBar() {
     setDropdownOpen(false);
   }, [location.pathname]);
 
-  if (location.pathname === '/') return null;
+  if (location.pathname === '/' || location.pathname === '/admin') return null;
 
   const current = SHOWCASE_PROJECTS.find((p) => p.path === location.pathname) || SHOWCASE_PROJECTS[0];
 

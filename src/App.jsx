@@ -9,6 +9,7 @@ const RestaurantPage = lazy(() => import('./pages/RestaurantPage'));
 const CoffeePage = lazy(() => import('./pages/CoffeePage'));
 const RenovationPage = lazy(() => import('./pages/RenovationPage'));
 const LightingPage = lazy(() => import('./pages/LightingPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 
 // Главная — сайт агентства Creators Digital; остальные маршруты — интерактивные демо-кейсы.
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/coffee" element={<CoffeePage />} />
         <Route path="/renovation" element={<RenovationPage />} />
         <Route path="/lighting" element={<LightingPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
