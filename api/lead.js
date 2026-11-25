@@ -17,8 +17,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   }
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim().replace(/^bot/i, '');
+  const chatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
 
   if (!token || !chatId) {
     return res.status(500).json({ ok: false, error: 'Telegram env vars are not configured' });

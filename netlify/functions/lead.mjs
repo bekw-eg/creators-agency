@@ -21,8 +21,8 @@ export async function handler(event) {
     };
   }
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim().replace(/^bot/i, '');
+  const chatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
 
   if (!token || !chatId) {
     return {
