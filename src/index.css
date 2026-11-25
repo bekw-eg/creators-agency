@@ -2,35 +2,153 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 1. Базовые стили прокрутки и плавности */
+/* ───────────── Глобальные базовые стили ───────────── */
 html {
   scroll-behavior: smooth;
 }
 
-/* 2. Кастомная стилизация скроллбара */
+/* Защита от горизонтального скролла. clip (в отличие от hidden) не ломает position: sticky. */
+html,
+body {
+  overflow-x: hidden;
+}
+@supports (overflow-x: clip) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: #0b0f17;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #334155;
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
 
-/* 3. Скрытие дефолтного скроллбара для горизонтальных табов */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ───────────── Creators Digital (главная) ───────────── */
+html.theme-creators,
+html.theme-creators body {
+  background: #0a0a0c;
+  color: #fff;
+}
+html.theme-creators {
+  scrollbar-color: #2a2a30 #0a0a0c;
+}
+html.theme-creators ::-webkit-scrollbar-track {
+  background: #0a0a0c;
+}
+html.theme-creators ::-webkit-scrollbar-thumb {
+  background: #2a2a30;
+}
+
+/* Кастомный курсор скрывает системный только на устройствах с мышью */
+html.has-custom-cursor,
+html.has-custom-cursor * {
+  cursor: none !important;
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-[1680px] px-5 sm:px-8 lg:px-12;
+  }
+
+  .link-underline {
+    @apply relative inline-block;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1px;
+    background-position: 100% 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .link-underline:hover {
+    background-size: 100% 1px;
+    background-position: 0% 100%;
+  }
+}
+
+/* Зерно поверх всей страницы (статичное — не нагружает GPU) */
+.noise-overlay {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Hero: свечения и сетка */
+.hero-glow {
+  background:
+    radial-gradient(60vmax 60vmax at 85% 20%, rgba(124, 92, 255, 0.22), transparent 60%),
+    radial-gradient(45vmax 45vmax at 5% 95%, rgba(198, 255, 0, 0.1), transparent 60%);
+}
+.hero-grid {
+  background-image:
+    linear-gradient(to right, #fff 1px, transparent 1px),
+    linear-gradient(to bottom, #fff 1px, transparent 1px);
+  background-size: 96px 96px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+
+/* Marquee */
+.marquee-track {
+  animation: marquee linear infinite;
+  will-change: transform;
+}
+@keyframes marquee {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Bento spotlight: подсветка границы и мягкое свечение за курсором */
+.spotlight-border,
+.spotlight-glow {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.spotlight-border {
+  background: radial-gradient(380px circle at var(--mx, -999px) var(--my, -999px), rgba(198, 255, 0, 0.85), transparent 45%);
+}
+.spotlight-glow {
+  background: radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(198, 255, 0, 0.07), transparent 45%);
+}
+@media (hover: hover) and (pointer: fine) {
+  .spotlight-grid:hover .spotlight-border {
+    opacity: 1;
+  }
+  .spotlight-card:hover .spotlight-glow {
+    opacity: 1;
+  }
+}
+
+/* Футер: градиентный вордмарк */
+.wordmark-gradient {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.08) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation-duration: 120s !important;
+  }
 }

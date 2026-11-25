@@ -20,7 +20,7 @@ export const RESTAURANT_MENU = [
     description: 'Сливочная буррата ручной работы на подушке из обожжённых в дровяной печи сладких перцев, томатов черри и масла зелёного базилика.',
     tags: ['Новинка'],
     spicy: false,
-    image: 'https://images.unsplash.com/photo-1592417817098-8f3d691a4bf5?auto=format&fit=crop&w=700&q=80',
+    image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80',
   },
   {
     id: 'dish-3',
@@ -64,7 +64,7 @@ export const RESTAURANT_MENU = [
     description: 'Розовая утиная грудка прожарки Medium с карамелизированным бататом и пикантным вишнёвым демигласом.',
     tags: ['Острое'],
     spicy: true,
-    image: 'https://images.unsplash.com/photo-1514944298352-f4d732142f74?auto=format&fit=crop&w=700&q=80',
+    image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=700&q=80',
   },
   {
     id: 'dish-7',

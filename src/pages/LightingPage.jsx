@@ -1,854 +1,542 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
+  CheckIcon,
+  InformationCircleIcon,
+  MapPinIcon,
   ShoppingBagIcon,
-  AdjustmentsHorizontalIcon,
-  EyeIcon,
-  PlusIcon,
-  MinusIcon,
   TrashIcon,
   XMarkIcon,
-  MapPinIcon,
-  PhoneIcon,
-  ExclamationCircleIcon,
-  ArrowsUpDownIcon,
 } from '@heroicons/react/24/outline';
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import { LIGHTING_PRODUCTS } from '../data/lightingData';
+import MaskLines from '../home/components/ui/MaskLines';
+import Marquee from '../home/components/ui/Marquee';
+import { ArrowIcon } from '../home/components/ui/MagneticButton';
+import {
+  AccentButton,
+  AccentLabel,
+  EASE,
+  ShowcaseHeader,
+  ShowcaseShell,
+  SpotlightCard,
+  SpotlightGrid,
+  formatKzt,
+} from '../showcase/ShowcaseShell';
 
-// 1. Страница салона освещения «LUMEN HOME»: галерейный европейский каталог (#FFFFFF фон, #F8F8F6 карточки, #E5E5E0 линии, #9A7B4F бронза)
-export default function LightingPage() {
-  // 2. Состояния для фильтрации каталога по категории, стилю, бюджету и сортировки
-  const [selectedCategory, setSelectedCategory] = useState('Все');
-  const [selectedStyle, setSelectedStyle] = useState('Все стили');
-  const [maxPriceLimit, setMaxPriceLimit] = useState(250000);
-  const [sortBy, setSortBy] = useState('popular');
+const CATEGORIES = ['Все', 'Люстры', 'Бра', 'Трековые системы', 'Торшеры'];
+const STYLES = ['Все стили', 'Модерн', 'Минимализм', 'Лофт', 'Классика'];
 
-  // 3. Состояние модального окна технических характеристик
-  const [modalProduct, setModalProduct] = useState(null);
+function LightingContent() {
+  const [category, setCategory] = useState('Все');
+  const [style, setStyle] = useState('Все стили');
+  const [sort, setSort] = useState('popular');
+  const [inspecting, setInspecting] = useState(null);
 
-  // 4. Состояние корзины покупок
-  const [cart, setCart] = useState([
-    {
-      product: LIGHTING_PRODUCTS[0],
-      qty: 1,
-    },
-  ]);
+  const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState('delivery');
-  const [needInstallation, setNeedInstallation] = useState(true);
-  const [buyerName, setBuyerName] = useState('');
+  const [delivery, setDelivery] = useState('courier'); // courier | pickup
+  const [withInstall, setWithInstall] = useState(true);
   const [buyerPhone, setBuyerPhone] = useState('');
-  const [buyerAddress, setBuyerAddress] = useState('');
-  const [orderError, setOrderError] = useState('');
-  const [orderSuccess, setOrderSuccess] = useState(null);
-  const [toastMsg, setToastMsg] = useState('');
+  const [error, setError] = useState('');
+  const [ordered, setOrdered] = useState(false);
 
-  const categories = ['Все', 'Люстры', 'Бра', 'Трековые системы', 'Торшеры'];
-  const styles = ['Все стили', 'Модерн', 'Классика', 'Лофт', 'Минимализм'];
-
-  // 5. Многоступенчатая фильтрация и сортировка товаров
-  const filteredAndSortedProducts = useMemo(() => {
-    const filtered = LIGHTING_PRODUCTS.filter((item) => {
-      const matchCat =
-        selectedCategory === 'Все' || item.category === selectedCategory;
-      const matchStyle =
-        selectedStyle === 'Все стили' || item.style === selectedStyle;
-      const matchPrice = item.price <= maxPriceLimit;
-      return matchCat && matchStyle && matchPrice;
+  const products = useMemo(() => {
+    const list = LIGHTING_PRODUCTS.filter((p) => {
+      if (category !== 'Все' && p.category !== category) return false;
+      if (style !== 'Все стили' && p.style !== style) return false;
+      return true;
     });
+    if (sort === 'price-asc') return [...list].sort((a, b) => a.price - b.price);
+    if (sort === 'price-desc') return [...list].sort((a, b) => b.price - a.price);
+    return [...list].sort((a, b) => b.popularity - a.popularity);
+  }, [category, style, sort]);
 
-    return [...filtered].sort((a, b) => {
-      if (sortBy === 'price-asc') return a.price - b.price;
-      if (sortBy === 'price-desc') return b.price - a.price;
-      return b.popularity - a.popularity;
-    });
-  }, [selectedCategory, selectedStyle, maxPriceLimit, sortBy]);
-
-  const handleAddToCart = (product) => {
+  const addToCart = (product) => {
+    setOrdered(false);
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.product.id === product.id ? { ...i, qty: i.qty + 1 } : i
-        );
+      const idx = prev.findIndex((i) => i.product.id === product.id);
+      if (idx > -1) {
+        return prev.map((i, k) => (k === idx ? { ...i, qty: i.qty + 1 } : i));
       }
       return [...prev, { product, qty: 1 }];
     });
-    setToastMsg(`«${product.name}» добавлен в корзину`);
-    setTimeout(() => setToastMsg(''), 2500);
+    setCartOpen(true);
   };
 
-  const handleQtyChange = (productId, delta) => {
+  const updateQty = (id, delta) => {
     setCart((prev) =>
       prev
-        .map((i) =>
-          i.product.id === productId ? { ...i, qty: i.qty + delta } : i
-        )
+        .map((i) => (i.product.id === id ? { ...i, qty: Math.min(10, i.qty + delta) } : i))
         .filter((i) => i.qty > 0)
     );
   };
 
-  const handleRemoveFromCart = (productId) => {
-    setCart((prev) => prev.filter((i) => i.product.id !== productId));
-  };
+  const totalItems = cart.reduce((acc, i) => acc + i.qty, 0);
+  const subtotal = cart.reduce((acc, i) => acc + i.product.price * i.qty, 0);
+  const deliveryCost = delivery === 'courier' && subtotal > 0 && subtotal < 120000 ? 3500 : 0;
+  const installCost = withInstall ? Math.round(subtotal * 0.12) : 0;
+  const grandTotal = subtotal + deliveryCost + installCost;
 
-  // 6. Расчёт стоимости заказа, доставки и монтажа
-  const cartCount = useMemo(
-    () => cart.reduce((sum, i) => sum + i.qty, 0),
-    [cart]
-  );
-
-  const subtotalPrice = useMemo(
-    () => cart.reduce((sum, i) => sum + i.product.price * i.qty, 0),
-    [cart]
-  );
-
-  const deliveryCost = useMemo(() => {
-    if (deliveryMethod === 'pickup') return 0;
-    return subtotalPrice >= 100000 ? 0 : 3500;
-  }, [deliveryMethod, subtotalPrice]);
-
-  const installationCost = useMemo(
-    () => (needInstallation && cartCount > 0 ? cartCount * 8500 : 0),
-    [needInstallation, cartCount]
-  );
-
-  const grandTotal = subtotalPrice + deliveryCost + installationCost;
-
-  const handleOrderSubmit = (e) => {
+  const handleCheckout = (e) => {
     e.preventDefault();
-    if (cart.length === 0) {
-      setOrderError('Ваша корзина пуста.');
+    if (!cart.length) return;
+    if (buyerPhone.trim().length < 7) {
+      setError('Укажите телефон для согласования доставки и монтажа.');
       return;
     }
-    if (!buyerName.trim() || buyerPhone.trim().length < 6) {
-      setOrderError('Укажите имя получателя и контактный телефон.');
-      return;
-    }
-    if (deliveryMethod === 'delivery' && !buyerAddress.trim()) {
-      setOrderError('Укажите адрес доставки в Астане.');
-      return;
-    }
-    setOrderError('');
-    setOrderSuccess({
-      orderId: `LH-${Math.floor(10000 + Math.random() * 90000)}`,
-      name: buyerName.trim(),
-      phone: buyerPhone.trim(),
-      deliveryMethod,
-      address:
-        deliveryMethod === 'pickup'
-          ? 'Самовывоз: г. Астана, пр. Кабанбай Батыра, 58Б (Салон LUMEN HOME)'
-          : buyerAddress.trim(),
-      needInstallation,
-      total: grandTotal,
-      itemsCount: cartCount,
-    });
+    setError('');
+    setOrdered(true);
     setCart([]);
   };
 
   return (
-    <div className="min-h-screen bg-[#FFFFFF] text-[#18181B] font-sans pb-24 selection:bg-[#9A7B4F] selection:text-white">
-      {toastMsg && (
-        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#18181B] text-white text-xs font-medium border border-[#9A7B4F]">
-          <CheckCircleIcon className="w-4 h-4 text-[#9A7B4F] shrink-0" />
-          <span>{toastMsg}</span>
-        </div>
-      )}
-
-      {/* 7. Галерейная шапка LUMEN HOME */}
-      <header className="sticky top-0 z-40 bg-[#FFFFFF] border-b border-[#E5E5E0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-base font-bold tracking-widest uppercase text-[#18181B]">
-              LUMEN HOME
-            </span>
-            <span className="hidden sm:inline-block text-xs text-[#71717A] border-l border-[#E5E5E0] pl-4">
-              Архитектурный и интерьерный свет • Астана
-            </span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8 text-xs font-medium uppercase tracking-wider text-[#71717A]">
-            <a href="#catalog" className="hover:text-[#18181B] transition">
-              Каталог ({LIGHTING_PRODUCTS.length})
-            </a>
-            <a href="#service-matrix" className="hover:text-[#18181B] transition">
-              Сервис и монтаж
-            </a>
-            <a href="#showroom-info" className="hover:text-[#18181B] transition">
-              Шоурум
-            </a>
-          </nav>
-
+    <>
+      <ShowcaseHeader
+        brand="LUMEN HOME"
+        subtitle="Architectural Lighting"
+        nav={[
+          { label: 'Каталог', href: '#catalog' },
+          { label: 'Шоурум', href: '#showroom-info' },
+        ]}
+        rightSlot={
           <button
             type="button"
-            onClick={() => {
-              setOrderSuccess(null);
-              setCartOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md bg-[#18181B] hover:bg-neutral-800 text-white text-xs font-medium transition"
+            onClick={() => setCartOpen(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 text-xs font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
           >
-            <ShoppingBagIcon className="w-4 h-4 text-[#9A7B4F]" />
-            <span>Корзина</span>
-            <span className="px-2 py-0.5 rounded-sm bg-[#9A7B4F] text-white font-mono text-[11px]">
-              {cartCount} • {subtotalPrice.toLocaleString('ru-RU')} ₸
-            </span>
+            <ShoppingBagIcon className="h-4 w-4 text-[var(--accent)]" />
+            <span>Корзина ({totalItems})</span>
           </button>
+        }
+      />
+
+      {/* Hero */}
+      <section id="top" className="relative isolate flex min-h-[95svh] flex-col justify-end overflow-hidden pt-28">
+        <div className="absolute inset-0 -z-20">
+          <img
+            src="/lighting-store.jpg"
+            alt="LUMEN HOME салон освещения"
+            className="h-full w-full scale-105 object-cover opacity-35"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0B] via-[#0A0A0B]/70 to-[#0A0A0B]/35" />
+          <div className="absolute inset-0 bg-[radial-gradient(50vmax_50vmax_at_80%_20%,rgba(212,175,122,0.18),transparent_65%)]" />
         </div>
-      </header>
 
-      {/* 8. Галерейный Hero-блок */}
-      <section className="bg-[#F8F8F6] border-b border-[#E5E5E0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20 grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-          <div className="lg:col-span-7">
-            <div className="text-xs font-mono uppercase tracking-widest text-[#9A7B4F] mb-4">
-              ARCHITECTURAL & DECORATIVE LIGHTING • ASTANA SHOWROOM
-            </div>
+        <div className="container-x pb-12 md:pb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EASE }}
+            className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.22em] text-white/60"
+          >
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+              Галерея архитектурного света · CRI 97+
+            </span>
+            <span>Доставка и монтаж по Астане</span>
+          </motion.div>
 
-            <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-[#18181B] leading-[1.12]">
-              Салон интерьерного освещения и магнитных трековых систем
-            </h1>
+          <MaskLines
+            as="h1"
+            trigger="mount"
+            play
+            delay={0.08}
+            className="font-grotesk text-[clamp(2.6rem,8.5vw,8.75rem)] font-semibold leading-[0.9] tracking-[-0.055em]"
+            lines={[
+              'Архитектура',
+              <>
+                и скульптура{' '}
+                <span className="font-serif font-normal italic tracking-[-0.02em] text-[var(--accent)]">света</span>
+              </>,
+            ]}
+          />
 
-            <p className="mt-5 text-base text-[#71717A] leading-relaxed max-w-xl">
-              Подвесные люстры из латуни и хрусталя K9, низковольтные трековые системы 48V, бра из матового стекла и торшеры на мраморном основании. Доставка со склада в Астане и чистый монтаж в день заказа.
+          <div className="mt-10 grid gap-8 md:grid-cols-12 md:items-end">
+            <p className="max-w-md text-base leading-relaxed text-white/60 md:col-span-5 md:text-lg">
+              Дизайнерские люстры из анодированной латуни, магнитные трековые системы 48V и бра для интерьеров с
+              бесплатным светотехническим расчётом.
             </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <a
-                href="#catalog"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#9A7B4F] hover:bg-[#866941] text-white font-medium text-xs uppercase tracking-wider transition"
-              >
-                <span>Смотреть каталог ({LIGHTING_PRODUCTS.length} моделей)</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => setModalProduct(LIGHTING_PRODUCTS[0])}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[#FFFFFF] hover:bg-neutral-100 text-[#18181B] font-medium text-xs uppercase tracking-wider border border-[#E5E5E0] transition"
-              >
-                <EyeIcon className="w-4 h-4 text-[#9A7B4F]" />
-                <span>Спецификация: Aurelia Gold Ring</span>
-              </button>
-            </div>
-
-            <div className="mt-10 pt-6 border-t border-[#E5E5E0] flex items-center gap-3.5">
-              <img
-                src="https://randomuser.me/api/portraits/women/68.jpg"
-                alt="Светотехник Камила Омарова"
-                className="w-11 h-11 rounded-full object-cover border border-neutral-200 shrink-0"
-              />
-              <div className="text-xs">
-                <div className="font-semibold text-[#18181B]">
-                  Камила Омарова — Ведущий инженер-светотехник LUMEN HOME
-                </div>
-                <div className="text-[#71717A] mt-0.5">
-                  Расчёт освещённости в люксах по дизайн-проекту вашей квартиры
-                </div>
-              </div>
+            <div className="flex flex-wrap gap-3 md:col-span-7 md:justify-end">
+              <AccentButton href="#catalog">
+                <span>Открыть каталог (10)</span>
+                <ArrowIcon className="h-4 w-4" />
+              </AccentButton>
+              <AccentButton variant="ghost" label={`Корзина (${totalItems})`} onClick={() => setCartOpen(true)} />
             </div>
           </div>
+        </div>
 
-          <div className="lg:col-span-5">
-            <div className="rounded-md overflow-hidden border border-[#E5E5E0] bg-[#FFFFFF]">
-              <img
-                src="/lighting-store.jpg"
-                alt="Дизайнерские люстры LUMEN HOME"
-                className="w-full h-80 object-cover"
-              />
-              <div className="p-4 border-t border-[#E5E5E0] flex items-center justify-between text-xs font-mono">
-                <span className="text-[#18181B]">AURELIA GOLD RING 800 (78W)</span>
-                <span className="text-[#9A7B4F] font-semibold">168 000 ₸</span>
-              </div>
-            </div>
-          </div>
+        <div className="border-y border-white/10 bg-[#0A0A0B]/80 py-4 backdrop-blur-md">
+          <Marquee
+            items={['Aurelia Gold', 'MagTrack 48V', 'K9 Optical Crystal', 'CRI 97+ LED', 'Профессиональный монтаж']}
+            duration={34}
+            itemClassName="font-grotesk text-lg font-medium tracking-[-0.02em] text-white/75 md:text-2xl [&_.text-acid]:text-[var(--accent)]"
+          />
         </div>
       </section>
 
-      {/* 9. Табличная полоса сервиса */}
-      <section id="service-matrix" className="bg-[#FFFFFF] border-b border-[#E5E5E0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#E5E5E0]">
-            <div className="py-6 md:pr-6">
-              <div className="text-xs font-mono uppercase text-[#9A7B4F]">01 / Логистика</div>
-              <div className="text-sm font-semibold text-[#18181B] mt-1">
-                Бесплатная доставка по Астане от 100 000 ₸
-              </div>
-              <p className="text-xs text-[#71717A] mt-1">
-                Доставка день в день собственным курьером с проверкой комплектации.
-              </p>
-            </div>
-            <div className="py-6 md:px-6">
-              <div className="text-xs font-mono uppercase text-[#9A7B4F]">02 / Установка</div>
-              <div className="text-sm font-semibold text-[#18181B] mt-1">
-                Монтаж на потолки до 4.5 метров
-              </div>
-              <p className="text-xs text-[#71717A] mt-1">
-                Сборка и подключение люстр и магнитных шин на натяжные и ГКЛ-потолки.
-              </p>
-            </div>
-            <div className="py-6 md:pl-6">
-              <div className="text-xs font-mono uppercase text-[#9A7B4F]">03 / Сервис</div>
-              <div className="text-sm font-semibold text-[#18181B] mt-1">
-                Гарантия от 24 до 60 месяцев
-              </div>
-              <p className="text-xs text-[#71717A] mt-1">
-                Оригинальные драйверы MeanWell и светодиоды с индексом цветопередачи CRI 95+.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 10. Каталог освещения в галерейном формате (чистые изображения без оверлейных пилюль) */}
-      <section id="catalog" className="py-16 sm:py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="pb-6 border-b border-[#E5E5E0] mb-8">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#9A7B4F] mb-1">
-            01 / Каталог продукции
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-semibold text-[#18181B]">
-            Интерьерные светильники в наличии
-          </h2>
-        </div>
-
-        {/* Строгая панель фильтрации */}
-        <div className="p-5 rounded-md bg-[#F8F8F6] border border-[#E5E5E0] mb-10 space-y-5">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* Catalog */}
+      <section id="catalog" className="py-24 md:py-36">
+        <div className="container-x">
+          <div className="mb-10 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div>
-              <div className="text-[11px] font-mono uppercase text-[#71717A] mb-2">
-                Раздел каталога:
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition border ${
-                      selectedCategory === cat
-                        ? 'bg-[#18181B] text-white border-[#18181B]'
-                        : 'bg-[#FFFFFF] text-[#71717A] border-[#E5E5E0] hover:border-[#18181B] hover:text-[#18181B]'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[11px] font-mono uppercase text-[#71717A] mb-2">
-                Направление дизайна:
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {styles.map((st) => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setSelectedStyle(st)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition border ${
-                      selectedStyle === st
-                        ? 'bg-[#9A7B4F] text-white border-[#9A7B4F]'
-                        : 'bg-[#FFFFFF] text-[#71717A] border-[#E5E5E0] hover:border-[#9A7B4F] hover:text-[#18181B]'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-[#E5E5E0] grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div>
-              <div className="flex items-center justify-between text-xs font-medium mb-2">
-                <span className="text-[#71717A] flex items-center gap-1.5 font-mono uppercase">
-                  <AdjustmentsHorizontalIcon className="w-4 h-4 text-[#9A7B4F]" />
-                  <span>Лимит цены:</span>
-                </span>
-                <span className="px-2.5 py-0.5 rounded-sm bg-[#18181B] text-white font-mono">
-                  до {maxPriceLimit.toLocaleString('ru-RU')} ₸
-                </span>
-              </div>
-              <input
-                type="range"
-                min={25000}
-                max={250000}
-                step={5000}
-                value={maxPriceLimit}
-                onChange={(e) => setMaxPriceLimit(Number(e.target.value))}
-                className="w-full h-2 bg-neutral-300 rounded-md appearance-none cursor-pointer accent-[#9A7B4F]"
+              <AccentLabel index="01" label="Каталог освещения" className="mb-5" />
+              <MaskLines
+                lines={['Коллекция', <span className="text-white/35">в наличии</span>]}
+                className="font-grotesk text-[clamp(2.2rem,5.5vw,5.25rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
               />
             </div>
 
-            <div className="flex items-center justify-between md:justify-end gap-3">
-              <span className="text-xs font-mono uppercase text-[#71717A] flex items-center gap-1">
-                <ArrowsUpDownIcon className="w-4 h-4" />
-                <span>Сортировка:</span>
-              </span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-2 rounded-md bg-[#FFFFFF] border border-[#E5E5E0] text-xs font-medium text-[#18181B] focus:outline-none focus:border-[#9A7B4F]"
-              >
-                <option value="popular">По популярности</option>
-                <option value="price-asc">По возрастанию цены (₸)</option>
-                <option value="price-desc">По убыванию цены (₸)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Галерейная сетка товаров */}
-        {filteredAndSortedProducts.length === 0 ? (
-          <div className="p-10 rounded-md bg-[#F8F8F6] border border-[#E5E5E0]">
-            <p className="text-base font-semibold text-[#18181B]">
-              По выбранным параметрам моделей не найдено
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedCategory('Все');
-                setSelectedStyle('Все стили');
-                setMaxPriceLimit(250000);
-              }}
-              className="mt-4 px-4 py-2 rounded-md bg-[#9A7B4F] text-white text-xs font-medium"
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="w-full max-w-xs rounded-full border border-white/15 bg-[#121215] px-4 py-3 text-xs text-white outline-none focus:border-[var(--accent)]"
             >
-              Сбросить фильтры
-            </button>
+              <option value="popular">Сначала популярные</option>
+              <option value="price-asc">Сначала дешевле</option>
+              <option value="price-desc">Сначала дороже</option>
+            </select>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAndSortedProducts.map((product) => (
-              <div
-                key={product.id}
-                className="rounded-md bg-[#F8F8F6] border border-[#E5E5E0] hover:border-[#9A7B4F] overflow-hidden transition flex flex-col justify-between"
+
+          <div className="mb-4 flex flex-wrap gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                className={`rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.12em] transition ${
+                  category === c
+                    ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0A0A0B]'
+                    : 'border-white/15 text-white/60 hover:border-white/40 hover:text-white'
+                }`}
               >
-                <div>
-                  {/* Чистое изображение без наложенных бейджей */}
-                  <div
-                    onClick={() => setModalProduct(product)}
-                    className="cursor-pointer h-60 overflow-hidden bg-neutral-100 border-b border-[#E5E5E0]"
-                  >
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover hover:opacity-95 transition"
-                      loading="lazy"
-                    />
-                  </div>
-
-                  {/* Строгий паспорт под фото */}
-                  <div className="p-5">
-                    <div className="flex items-center justify-between text-[11px] text-[#71717A] font-mono pb-2 border-b border-[#E5E5E0]">
-                      <span>{product.sku}</span>
-                      <span>{product.category.toUpperCase()} • {product.style.toUpperCase()}</span>
-                    </div>
-
-                    <h3
-                      onClick={() => setModalProduct(product)}
-                      className="cursor-pointer text-base font-semibold text-[#18181B] hover:text-[#9A7B4F] mt-3 leading-snug transition"
-                    >
-                      {product.name}
-                    </h3>
-
-                    <div className="mt-3 space-y-1 text-xs text-[#71717A] font-mono">
-                      <div className="flex justify-between">
-                        <span>Мощность:</span>
-                        <span className="text-[#18181B]">{product.specs.power}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Освещение:</span>
-                        <span className="text-[#18181B]">{product.specs.area}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-5 py-3.5 bg-[#FFFFFF] border-t border-[#E5E5E0] flex items-center justify-between gap-2">
-                  <div>
-                    {product.oldPrice && (
-                      <span className="text-[11px] font-mono text-[#71717A] line-through block">
-                        {product.oldPrice.toLocaleString('ru-RU')} ₸
-                      </span>
-                    )}
-                    <span className="text-base font-mono font-semibold text-[#18181B]">
-                      {product.price.toLocaleString('ru-RU')} ₸
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setModalProduct(product)}
-                      className="px-2.5 py-2 rounded-md bg-[#F8F8F6] hover:bg-neutral-200 text-[#18181B] border border-[#E5E5E0] text-xs font-medium transition"
-                      title="Паспорт модели"
-                    >
-                      Паспорт
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCart(product)}
-                      className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-[#9A7B4F] hover:bg-[#866941] text-white text-xs font-medium transition"
-                    >
-                      <PlusIcon className="w-3.5 h-3.5" />
-                      <span>В корзину</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                {c}
+              </button>
             ))}
           </div>
-        )}
-      </section>
 
-      {/* 11. Модальное окно технического паспорта светильника */}
-      {modalProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="relative w-full max-w-2xl rounded-md bg-[#FFFFFF] border border-[#E5E5E0] text-[#18181B] p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => setModalProduct(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-md bg-[#F8F8F6] hover:bg-[#18181B] hover:text-white border border-[#E5E5E0] transition"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
+          <div className="mb-10 flex flex-wrap gap-2">
+            {STYLES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStyle(s)}
+                className={`rounded-full px-3.5 py-1.5 font-mono text-[11px] transition ${
+                  style === s ? 'bg-white/15 text-white' : 'text-white/45 hover:text-white'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
-              <div className="sm:col-span-5">
-                <img
-                  src={modalProduct.image}
-                  alt={modalProduct.name}
-                  className="w-full h-60 object-cover rounded-md border border-[#E5E5E0]"
-                />
-                <div className="mt-3 flex items-center justify-between text-xs font-mono">
-                  <span className="text-[#9A7B4F]">В НАЛИЧИИ • АСТАНА</span>
-                  <span className="text-[#71717A]">{modalProduct.sku}</span>
-                </div>
-              </div>
-
-              <div className="sm:col-span-7 space-y-4">
-                <div>
-                  <span className="text-xs font-mono uppercase text-[#9A7B4F]">
-                    {modalProduct.category} • {modalProduct.style}
+          <SpotlightGrid className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {products.map((p) => (
+              <SpotlightCard key={p.id} innerClassName="flex flex-col">
+                <div className="relative aspect-[4/3] overflow-hidden bg-white/5">
+                  <img
+                    src={p.image}
+                    alt={p.name}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-700 ease-expo group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#101014] via-transparent to-black/20" />
+                  <span className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/50 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-white/90 backdrop-blur-md">
+                    {p.badge}
                   </span>
-                  <h3 className="text-lg font-semibold text-[#18181B] mt-1">
-                    {modalProduct.name}
-                  </h3>
-                  <p className="text-xs text-[#71717A] mt-2 leading-relaxed">
-                    {modalProduct.description}
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-md bg-[#F8F8F6] border border-[#E5E5E0] space-y-2 text-xs">
-                  <div className="font-mono font-semibold text-[#18181B] uppercase tracking-wider mb-1">
-                    Спецификация изделия:
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#E5E5E0]">
-                    <span className="text-[#71717A]">Мощность:</span>
-                    <span className="font-medium text-right">{modalProduct.specs.power}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#E5E5E0]">
-                    <span className="text-[#71717A]">Площадь освещения:</span>
-                    <span className="font-medium text-right">{modalProduct.specs.area}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#E5E5E0]">
-                    <span className="text-[#71717A]">Температура света:</span>
-                    <span className="font-medium text-right">{modalProduct.specs.colorTemp}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#E5E5E0]">
-                    <span className="text-[#71717A]">Материалы:</span>
-                    <span className="font-medium text-right">{modalProduct.specs.material}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#E5E5E0]">
-                    <span className="text-[#71717A]">Габариты:</span>
-                    <span className="font-medium text-right">{modalProduct.specs.dimensions}</span>
-                  </div>
-                  <div className="flex justify-between pt-1">
-                    <span className="text-[#71717A]">Гарантия:</span>
-                    <span className="font-semibold text-[#9A7B4F]">{modalProduct.specs.warranty}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex items-center justify-between gap-4">
-                  <div>
-                    {modalProduct.oldPrice && (
-                      <span className="text-xs font-mono text-[#71717A] line-through block">
-                        {modalProduct.oldPrice.toLocaleString('ru-RU')} ₸
-                      </span>
-                    )}
-                    <span className="text-2xl font-mono font-semibold text-[#18181B]">
-                      {modalProduct.price.toLocaleString('ru-RU')} ₸
-                    </span>
-                  </div>
-
                   <button
                     type="button"
-                    onClick={() => {
-                      handleAddToCart(modalProduct);
-                      setModalProduct(null);
-                      setCartOpen(true);
-                    }}
-                    className="px-5 py-2.5 rounded-md bg-[#9A7B4F] hover:bg-[#866941] text-white font-medium text-xs uppercase tracking-wider transition"
+                    onClick={() => setInspecting(p)}
+                    aria-label="Паспорт характеристик"
+                    className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-black/50 text-white/80 backdrop-blur-md transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
                   >
-                    Добавить в корзину
+                    <InformationCircleIcon className="h-5 w-5" />
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* 12. Выдвижная корзина заказа */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
-          <div className="w-full max-w-md bg-[#FFFFFF] text-[#18181B] h-full flex flex-col justify-between p-6 overflow-y-auto border-l border-[#E5E5E0]">
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-[#E5E5E0]">
-                <div className="flex items-center gap-2">
-                  <ShoppingBagIcon className="w-5 h-5 text-[#9A7B4F]" />
-                  <h3 className="text-base font-semibold">Корзина заказа</h3>
+                <div className="flex flex-1 flex-col justify-between p-6">
+                  <div>
+                    <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-white/45">
+                      <span>
+                        {p.category} · {p.style}
+                      </span>
+                      <span>{p.sku}</span>
+                    </div>
+                    <h3 className="mt-2 font-grotesk text-lg font-semibold leading-snug">{p.name}</h3>
+                    <p className="mt-2 text-xs leading-relaxed text-white/55">{p.description}</p>
+                  </div>
+
+                  <div className="mt-6 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+                    <div>
+                      <div className="font-grotesk text-xl font-semibold text-[var(--accent)] tabular-nums">
+                        {formatKzt(p.price)}
+                      </div>
+                      {p.oldPrice && (
+                        <div className="font-mono text-[11px] text-white/35 line-through">{formatKzt(p.oldPrice)}</div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addToCart(p)}
+                      className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white/85 transition hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[#0A0A0B]"
+                    >
+                      В корзину
+                    </button>
+                  </div>
                 </div>
+              </SpotlightCard>
+            ))}
+          </SpotlightGrid>
+        </div>
+      </section>
+
+      {/* Showroom Info */}
+      <footer id="showroom-info" className="border-t border-white/10 py-14">
+        <div className="container-x flex flex-col items-start justify-between gap-4 text-xs text-white/50 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 font-mono uppercase tracking-[0.18em]">
+            <MapPinIcon className="h-4 w-4 text-[var(--accent)]" />
+            <span>LUMEN HOME · Астана, ТД «Армада» / Левый берег</span>
+          </div>
+          <span className="font-mono">Бесплатная доставка при заказе от 120 000 ₸</span>
+        </div>
+      </footer>
+
+      {/* Product Specs Modal */}
+      <AnimatePresence>
+        {inspecting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+            onClick={() => setInspecting(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 16 }}
+              transition={{ duration: 0.3, ease: EASE }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-[28px] border border-white/15 bg-[#111114] p-6 sm:p-8"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--accent)]">
+                    Паспорт светильника · {inspecting.sku}
+                  </p>
+                  <h3 className="mt-1 font-grotesk text-2xl font-semibold">{inspecting.name}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInspecting(null)}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/60 hover:text-white"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
+              <dl className="mt-6 divide-y divide-white/10 border-y border-white/10 text-xs">
+                {[
+                  ['Мощность', inspecting.specs.power],
+                  ['Площадь освещения', inspecting.specs.area],
+                  ['Цветовая температура', inspecting.specs.colorTemp],
+                  ['Материалы', inspecting.specs.material],
+                  ['Габариты', inspecting.specs.dimensions],
+                  ['Гарантия', inspecting.specs.warranty],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-4 py-3">
+                    <dt className="text-white/45">{k}</dt>
+                    <dd className="text-right font-medium text-white/90">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="mt-6 flex items-center justify-between">
+                <span className="font-grotesk text-2xl font-semibold text-[var(--accent)]">
+                  {formatKzt(inspecting.price)}
+                </span>
+                <AccentButton
+                  label="Добавить в корзину"
+                  onClick={() => {
+                    addToCart(inspecting);
+                    setInspecting(null);
+                  }}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Cart Drawer */}
+      <AnimatePresence>
+        {cartOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm"
+            onClick={() => setCartOpen(false)}
+          >
+            <motion.aside
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.4, ease: EASE }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex h-full w-full max-w-md flex-col justify-between border-l border-white/10 bg-[#101013] p-6"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <h3 className="font-grotesk text-xl font-semibold">Корзина ({totalItems})</h3>
                 <button
                   type="button"
                   onClick={() => setCartOpen(false)}
-                  className="p-1.5 rounded-md bg-[#F8F8F6] hover:bg-[#18181B] hover:text-white border border-[#E5E5E0] transition"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/60 hover:text-white"
                 >
-                  <XMarkIcon className="w-4 h-4" />
+                  <XMarkIcon className="h-4 w-4" />
                 </button>
               </div>
 
-              {orderSuccess ? (
-                <div className="mt-6 p-5 rounded-md bg-[#F8F8F6] border border-[#9A7B4F] space-y-4">
-                  <div className="flex items-center gap-3">
-                    <CheckCircleIcon className="w-6 h-6 text-[#9A7B4F] shrink-0" />
-                    <div>
-                      <div className="text-xs font-mono uppercase text-[#9A7B4F]">
-                        Накладная #{orderSuccess.orderId}
-                      </div>
-                      <h4 className="text-base font-semibold text-[#18181B]">
-                        Заказ принят, {orderSuccess.name}
-                      </h4>
-                    </div>
+              <div className="my-5 flex-1 space-y-4 overflow-y-auto">
+                {ordered ? (
+                  <div className="rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 p-6 text-center">
+                    <CheckIcon className="mx-auto h-10 w-10 text-[var(--accent)]" />
+                    <h4 className="mt-3 font-grotesk text-xl font-semibold">Заказ оформлен!</h4>
+                    <p className="mt-2 text-xs text-white/70">
+                      Менеджер LUMEN HOME свяжется с вами по номеру {buyerPhone} в течение 15 минут.
+                    </p>
                   </div>
-
-                  <div className="text-xs space-y-1.5 bg-[#FFFFFF] p-4 rounded-md border border-[#E5E5E0]">
-                    <div>
-                      <span className="text-[#71717A]">Доставка / получение: </span>
-                      <span className="font-semibold">{orderSuccess.address}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#71717A]">Монтаж: </span>
-                      <span className="font-semibold">
-                        {orderSuccess.needInstallation ? 'Включён' : 'Без монтажа'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[#71717A]">Итого: </span>
-                      <span className="font-mono font-semibold text-sm text-[#18181B]">
-                        {orderSuccess.total.toLocaleString('ru-RU')} ₸
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOrderSuccess(null);
-                      setCartOpen(false);
-                    }}
-                    className="w-full py-2.5 rounded-md bg-[#9A7B4F] text-white text-xs font-medium"
-                  >
-                    Вернуться в каталог
-                  </button>
-                </div>
-              ) : cart.length === 0 ? (
-                <div className="py-16 text-center">
-                  <p className="text-sm font-semibold text-[#18181B]">Корзина пуста</p>
-                  <p className="text-xs text-[#71717A] mt-1">
-                    Выберите модели освещения в каталоге.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-4 divide-y divide-[#E5E5E0] border border-[#E5E5E0] rounded-md bg-[#F8F8F6]">
-                  {cart.map(({ product, qty }) => (
-                    <div
-                      key={product.id}
-                      className="p-3.5 flex items-center justify-between gap-3"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[10px] font-mono text-[#71717A]">{product.sku}</div>
-                        <div className="text-xs font-semibold text-[#18181B] truncate">
-                          {product.name}
-                        </div>
-                        <div className="text-xs font-mono font-semibold text-[#9A7B4F] mt-0.5">
-                          {(product.price * qty).toLocaleString('ru-RU')} ₸
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFromCart(product.id)}
-                          className="text-[#71717A] hover:text-[#18181B]"
+                ) : cart.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-white/45">Корзина пуста — выберите светильники в каталоге.</p>
+                ) : (
+                  <>
+                    <ul className="space-y-2.5">
+                      {cart.map(({ product, qty }) => (
+                        <li
+                          key={product.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5"
                         >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                        <div className="flex items-center gap-1.5 bg-[#FFFFFF] px-2 py-1 rounded-md border border-[#E5E5E0]">
-                          <button
-                            type="button"
-                            onClick={() => handleQtyChange(product.id, -1)}
-                          >
-                            <MinusIcon className="w-3 h-3" />
-                          </button>
-                          <span className="text-xs font-mono font-semibold w-4 text-center">{qty}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleQtyChange(product.id, 1)}
-                          >
-                            <PlusIcon className="w-3 h-3" />
-                          </button>
+                          <img src={product.image} alt={product.name} className="h-14 w-14 rounded-xl object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-xs font-semibold">{product.name}</div>
+                            <div className="mt-1 font-mono text-xs text-[var(--accent)]">
+                              {formatKzt(product.price * qty)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => updateQty(product.id, -1)}
+                              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-xs"
+                            >
+                              −
+                            </button>
+                            <span className="w-5 text-center font-mono text-xs">{qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(product.id, 1)}
+                              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-xs"
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(product.id, -qty)}
+                              className="ml-1 text-white/40 hover:text-red-400"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="space-y-3 border-t border-white/10 pt-4 text-xs">
+                      {delivery === 'courier' && subtotal > 0 && subtotal < 120000 && (
+                        <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-3.5 py-2.5 text-[11px] text-[var(--accent)]">
+                          До бесплатной доставки осталось {formatKzt(120000 - subtotal)}
                         </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { id: 'courier', label: 'Курьером по Астане' },
+                          { id: 'pickup', label: 'Самовывоз (0 ₸)' },
+                        ].map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setDelivery(d.id)}
+                            className={`rounded-xl border py-2.5 font-medium transition ${
+                              delivery === d.id
+                                ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0A0A0B]'
+                                : 'border-white/15 text-white/70'
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setWithInstall((v) => !v)}
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                          withInstall ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-white/15'
+                        }`}
+                      >
+                        <span>Монтаж штатным электриком (+12%)</span>
+                        <span className="font-mono text-[var(--accent)]">{withInstall ? 'Да' : 'Нет'}</span>
+                      </button>
+
+                      <input
+                        type="tel"
+                        value={buyerPhone}
+                        onChange={(e) => setBuyerPhone(e.target.value)}
+                        placeholder="Телефон +7 (701) 000-00-00 *"
+                        className="w-full rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-xs text-white placeholder:text-white/35 outline-none focus:border-[var(--accent)]"
+                      />
+                      {error && <p className="text-xs text-red-400">{error}</p>}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {!orderSuccess && cart.length > 0 && (
-              <form
-                onSubmit={handleOrderSubmit}
-                className="mt-6 pt-4 border-t border-[#E5E5E0] space-y-3"
-              >
-                {orderError && (
-                  <div className="p-2.5 rounded-md bg-[#F8F8F6] border border-[#9A7B4F] text-[#18181B] text-xs flex items-center gap-1.5">
-                    <ExclamationCircleIcon className="w-4 h-4 text-[#9A7B4F] shrink-0" />
-                    <span>{orderError}</span>
-                  </div>
+                  </>
                 )}
+              </div>
 
-                <div>
-                  <label className="block text-[11px] font-mono uppercase text-[#71717A] mb-1.5">
-                    Способ получения
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryMethod('delivery')}
-                      className={`py-2 px-3 rounded-md text-xs font-medium border transition ${
-                        deliveryMethod === 'delivery'
-                          ? 'bg-[#18181B] text-white border-[#18181B]'
-                          : 'bg-[#F8F8F6] text-[#18181B] border-[#E5E5E0]'
-                      }`}
-                    >
-                      Доставка курьером
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryMethod('pickup')}
-                      className={`py-2 px-3 rounded-md text-xs font-medium border transition ${
-                        deliveryMethod === 'pickup'
-                          ? 'bg-[#18181B] text-white border-[#18181B]'
-                          : 'bg-[#F8F8F6] text-[#18181B] border-[#E5E5E0]'
-                      }`}
-                    >
-                      Самовывоз
-                    </button>
+              {cart.length > 0 && (
+                <form onSubmit={handleCheckout} className="space-y-2 border-t border-white/10 pt-4 text-xs">
+                  <div className="flex justify-between text-white/55">
+                    <span>Доставка</span>
+                    <span className="font-mono">{deliveryCost ? formatKzt(deliveryCost) : 'Бесплатно'}</span>
                   </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setNeedInstallation((prev) => !prev)}
-                  className={`w-full py-2.5 px-3.5 rounded-md border text-xs font-medium flex items-center justify-between transition ${
-                    needInstallation
-                      ? 'bg-[#F8F8F6] border-[#9A7B4F] text-[#18181B]'
-                      : 'bg-[#F8F8F6] border-[#E5E5E0] text-[#71717A]'
-                  }`}
-                >
-                  <span>Услуга монтажа (+8 500 ₸ / шт.)</span>
-                  <span className="font-mono font-semibold text-[#9A7B4F]">{needInstallation ? 'ДА' : 'НЕТ'}</span>
-                </button>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={buyerName}
-                    onChange={(e) => setBuyerName(e.target.value)}
-                    placeholder="Ваше имя *"
-                    className="px-3 py-2 rounded-md bg-[#F8F8F6] border border-[#E5E5E0] text-xs"
-                  />
-                  <input
-                    type="tel"
-                    value={buyerPhone}
-                    onChange={(e) => setBuyerPhone(e.target.value)}
-                    placeholder="+7 (701) 000-00-00 *"
-                    className="px-3 py-2 rounded-md bg-[#F8F8F6] border border-[#E5E5E0] text-xs"
-                  />
-                </div>
-
-                {deliveryMethod === 'delivery' && (
-                  <input
-                    type="text"
-                    value={buyerAddress}
-                    onChange={(e) => setBuyerAddress(e.target.value)}
-                    placeholder="Адрес доставки в Астане *"
-                    className="w-full px-3 py-2 rounded-md bg-[#F8F8F6] border border-[#E5E5E0] text-xs"
-                  />
-                )}
-
-                <div className="p-3 rounded-md bg-[#F8F8F6] border border-[#E5E5E0] text-xs font-mono space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-[#71717A]">ТОВАРЫ ({cartCount}):</span>
-                    <span>{subtotalPrice.toLocaleString('ru-RU')} ₸</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#71717A]">ДОСТАВКА:</span>
-                    <span>
-                      {deliveryCost === 0 ? '0 ₸' : `${deliveryCost.toLocaleString('ru-RU')} ₸`}
-                    </span>
-                  </div>
-                  {needInstallation && (
-                    <div className="flex justify-between">
-                      <span className="text-[#71717A]">МОНТАЖ:</span>
-                      <span>{installationCost.toLocaleString('ru-RU')} ₸</span>
+                  {withInstall && (
+                    <div className="flex justify-between text-white/55">
+                      <span>Монтаж</span>
+                      <span className="font-mono">{formatKzt(installCost)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-1.5 border-t border-[#E5E5E0] text-sm font-semibold">
-                    <span>ИТОГО:</span>
-                    <span className="text-[#9A7B4F]">{grandTotal.toLocaleString('ru-RU')} ₸</span>
+                  <div className="flex items-baseline justify-between pt-2">
+                    <span className="font-mono uppercase text-white/50">Итого</span>
+                    <span className="font-grotesk text-2xl font-semibold text-[var(--accent)] tabular-nums">
+                      {formatKzt(grandTotal)}
+                    </span>
                   </div>
-                </div>
+                  <button
+                    type="submit"
+                    className="mt-2 w-full rounded-full bg-[var(--accent)] py-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#0A0A0B] transition hover:bg-white"
+                  >
+                    Оформить заказ
+                  </button>
+                </form>
+              )}
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
 
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-md bg-[#9A7B4F] hover:bg-[#866941] text-white font-medium text-xs uppercase tracking-wider transition"
-                >
-                  Оформить заказ ({grandTotal.toLocaleString('ru-RU')} ₸)
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 13. Футер */}
-      <footer id="showroom-info" className="py-10 bg-[#F8F8F6] border-t border-[#E5E5E0] text-[#71717A] text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-semibold text-[#18181B]">
-            LUMEN HOME • САЛОН ОСВЕЩЕНИЯ АСТАНА
-          </div>
-          <div className="flex flex-wrap items-center gap-6">
-            <span className="flex items-center gap-1.5">
-              <MapPinIcon className="w-4 h-4 text-[#9A7B4F]" />
-              пр. Кабанбай Батыра, 58Б (ТЦ Декор Центр)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <PhoneIcon className="w-4 h-4 text-[#9A7B4F]" />
-              +7 (7172) 55-19-80
-            </span>
-          </div>
-        </div>
-      </footer>
-    </div>
+export default function LightingPage() {
+  return (
+    <ShowcaseShell title="LUMEN HOME — Салон дизайнерского освещения в Астане" accent="#D4AF7A" bg="#0A0A0B">
+      <LightingContent />
+    </ShowcaseShell>
   );
 }

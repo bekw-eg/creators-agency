@@ -1,19 +1,22 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ShowcaseBar from './components/ShowcaseBar';
-import HubPage from './pages/HubPage';
-import BarbershopPage from './pages/BarbershopPage';
-import RestaurantPage from './pages/RestaurantPage';
-import CoffeePage from './pages/CoffeePage';
-import RenovationPage from './pages/RenovationPage';
-import LightingPage from './pages/LightingPage';
+import HomePage from './home/HomePage';
 
-// 1. Корневой компонент маршрутизации интерактивного шоурума (Хаб + 5 нишевых сайтов + глобальный ShowcaseBar)
+// Демо-кейсы грузятся отдельными чанками, чтобы не утяжелять главную.
+const BarbershopPage = lazy(() => import('./pages/BarbershopPage'));
+const RestaurantPage = lazy(() => import('./pages/RestaurantPage'));
+const CoffeePage = lazy(() => import('./pages/CoffeePage'));
+const RenovationPage = lazy(() => import('./pages/RenovationPage'));
+const LightingPage = lazy(() => import('./pages/LightingPage'));
+
+// Главная — сайт агентства Creators Digital; остальные маршруты — интерактивные демо-кейсы.
 export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
+      <Suspense fallback={<div className="min-h-screen bg-[#0A0A0C]" />}>
       <Routes>
-        <Route path="/" element={<HubPage />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/barbershop" element={<BarbershopPage />} />
         <Route path="/restaurant" element={<RestaurantPage />} />
         <Route path="/coffee" element={<CoffeePage />} />
@@ -21,8 +24,9 @@ export default function App() {
         <Route path="/lighting" element={<LightingPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
 
-      {/* 2. Плавающая панель шоурума (отображается на всех роутах, кроме '/') */}
+      {/* Плавающая панель шоурума (отображается на всех роутах, кроме '/') */}
       <ShowcaseBar />
     </div>
   );

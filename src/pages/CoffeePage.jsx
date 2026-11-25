@@ -1,870 +1,582 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ShoppingBagIcon,
+  CheckIcon,
+  MapPinIcon,
   PlusIcon,
-  MinusIcon,
+  ShoppingBagIcon,
   TrashIcon,
   XMarkIcon,
-  MapPinIcon,
-  ClockIcon,
-  AdjustmentsHorizontalIcon,
-  ExclamationCircleIcon,
 } from '@heroicons/react/24/outline';
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { COFFEE_CUSTOMIZATION, COFFEE_LOCATIONS, COFFEE_MENU } from '../data/coffeeData';
+import MaskLines from '../home/components/ui/MaskLines';
+import Marquee from '../home/components/ui/Marquee';
+import { ArrowIcon } from '../home/components/ui/MagneticButton';
 import {
-  COFFEE_CUSTOMIZATION,
-  COFFEE_MENU,
-  COFFEE_LOCATIONS,
-} from '../data/coffeeData';
+  AccentButton,
+  AccentLabel,
+  EASE,
+  ShowcaseHeader,
+  ShowcaseShell,
+  SpotlightCard,
+  SpotlightGrid,
+  formatKzt,
+} from '../showcase/ShowcaseShell';
 
-// 1. Страница кофейни «ROASTERY 01»: минималистичная крафтовая сетка меню-борда (#F4F1EA фон, #FCFBF8 блоки, #E2DCD0 линии, #4A3222 эспрессо)
-export default function CoffeePage() {
-  // 2. Состояния для категории меню, конструктора напитка и корзины предзаказа
-  const [activeCategory, setActiveCategory] = useState('Все');
-  const [builderDrink, setBuilderDrink] = useState(null);
-  const [selectedSize, setSelectedSize] = useState(COFFEE_CUSTOMIZATION.sizes[1]);
-  const [selectedMilk, setSelectedMilk] = useState(COFFEE_CUSTOMIZATION.milks[0]);
-  const [selectedSyrup, setSelectedSyrup] = useState(COFFEE_CUSTOMIZATION.syrups[0]);
-  const [extraShot, setExtraShot] = useState(false);
+const CATEGORIES = ['Все', 'Кофе на эспрессо', 'Авторский кофе', 'Альтернатива', 'Выпечка и десерты'];
+const PICKUP_TIMES = ['Через 10 мин', 'Через 20 мин', 'Через 30 мин', 'К точному времени'];
 
-  // 3. Корзина предзаказа «С собой»
-  const [cart, setCart] = useState([
-    {
-      cartKey: 'cf-1-M-oat-none-false',
-      itemId: 'cf-1',
-      name: 'Флэт Уайт (Эфиопия Иргачефф)',
-      image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=700&q=80',
-      customSummary: 'M (350 мл) • Овсяное Oatly Barista • Без сиропа',
-      unitPrice: 2240,
-      qty: 1,
-    },
-  ]);
+function CoffeeContent() {
+  const [category, setCategory] = useState('Все');
+  const [customizing, setCustomizing] = useState(null);
+  const [sizeId, setSizeId] = useState('M');
+  const [milkId, setMilkId] = useState('regular');
+  const [syrupId, setSyrupId] = useState('none');
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [pickupLocation, setPickupLocation] = useState(COFFEE_LOCATIONS[0].name);
-  const [pickupTime, setPickupTime] = useState('Через 10 минут');
-  const [customerName, setCustomerName] = useState('');
+  const [cart, setCart] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [locationId, setLocationId] = useState(COFFEE_LOCATIONS[0].id);
+  const [pickupTime, setPickupTime] = useState(PICKUP_TIMES[0]);
+  const [exactTime, setExactTime] = useState('14:00');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [checkoutError, setCheckoutError] = useState('');
-  const [completedOrder, setCompletedOrder] = useState(null);
-  const [toastMsg, setToastMsg] = useState('');
+  const [orderError, setOrderError] = useState('');
+  const [orderDone, setOrderDone] = useState(false);
 
-  const categories = ['Все', 'Кофе на эспрессо', 'Авторский кофе', 'Альтернатива', 'Выпечка и десерты'];
+  const filtered = useMemo(
+    () => (category === 'Все' ? COFFEE_MENU : COFFEE_MENU.filter((i) => i.category === category)),
+    [category]
+  );
 
-  const filteredMenu = useMemo(() => {
-    if (activeCategory === 'Все') return COFFEE_MENU;
-    return COFFEE_MENU.filter((item) => item.category === activeCategory);
-  }, [activeCategory]);
-
-  // 4. Мгновенный пересчёт цены напитка в конструкторе
-  const currentBuilderPrice = useMemo(() => {
-    if (!builderDrink) return 0;
-    const shotAdd = extraShot ? 350 : 0;
-    return (
-      builderDrink.basePrice +
-      selectedSize.priceAdd +
-      selectedMilk.priceAdd +
-      selectedSyrup.priceAdd +
-      shotAdd
-    );
-  }, [builderDrink, selectedSize, selectedMilk, selectedSyrup, extraShot]);
-
-  const openDrinkBuilder = (item) => {
-    if (!item.isCustomizable) {
-      addDirectItemToCart(item);
-      return;
-    }
-    setBuilderDrink(item);
-    setSelectedSize(COFFEE_CUSTOMIZATION.sizes[1]);
-    setSelectedMilk(COFFEE_CUSTOMIZATION.milks[0]);
-    setSelectedSyrup(COFFEE_CUSTOMIZATION.syrups[0]);
-    setExtraShot(false);
+  const openBuilder = (item) => {
+    setSizeId('M');
+    setMilkId('regular');
+    setSyrupId('none');
+    setCustomizing(item);
   };
 
-  const addDirectItemToCart = (item) => {
-    const key = `${item.id}-standard`;
+  const sizeObj = COFFEE_CUSTOMIZATION.sizes.find((s) => s.id === sizeId) || COFFEE_CUSTOMIZATION.sizes[0];
+  const milkObj = COFFEE_CUSTOMIZATION.milks.find((m) => m.id === milkId) || COFFEE_CUSTOMIZATION.milks[0];
+  const syrupObj = COFFEE_CUSTOMIZATION.syrups.find((s) => s.id === syrupId) || COFFEE_CUSTOMIZATION.syrups[0];
+
+  const customPrice = customizing
+    ? customizing.basePrice + sizeObj.priceAdd + milkObj.priceAdd + syrupObj.priceAdd
+    : 0;
+
+  const addToCart = (item, meta = null, price = item.basePrice) => {
+    setOrderDone(false);
+    const key = `${item.id}::${meta || 'base'}`;
     setCart((prev) => {
-      const existing = prev.find((c) => c.cartKey === key);
+      const existing = prev.find((c) => c.key === key);
       if (existing) {
-        return prev.map((c) => (c.cartKey === key ? { ...c, qty: c.qty + 1 } : c));
+        return prev.map((c) => (c.key === key ? { ...c, qty: Math.min(10, c.qty + 1) } : c));
       }
-      return [
-        ...prev,
-        {
-          cartKey: key,
-          itemId: item.id,
-          name: item.name,
-          image: item.image,
-          customSummary: 'Стандартная подача',
-          unitPrice: item.basePrice,
-          qty: 1,
-        },
-      ];
+      return [...prev, { key, item, meta, price, qty: 1 }];
     });
-    setToastMsg(`«${item.name}» добавлен в предзаказ`);
-    setTimeout(() => setToastMsg(''), 2400);
+    setCustomizing(null);
+    setCartOpen(true);
   };
 
-  const confirmAddFromBuilder = () => {
-    if (!builderDrink) return;
-    const key = `${builderDrink.id}-${selectedSize.id}-${selectedMilk.id}-${selectedSyrup.id}-${extraShot}`;
-    const summaryParts = [
-      selectedSize.label,
-      selectedMilk.label,
-      selectedSyrup.label,
-    ];
-    if (extraShot) summaryParts.push('+ Доп. эспрессо-шот');
-
-    setCart((prev) => {
-      const existing = prev.find((c) => c.cartKey === key);
-      if (existing) {
-        return prev.map((c) => (c.cartKey === key ? { ...c, qty: c.qty + 1 } : c));
-      }
-      return [
-        ...prev,
-        {
-          cartKey: key,
-          itemId: builderDrink.id,
-          name: builderDrink.name,
-          image: builderDrink.image,
-          customSummary: summaryParts.join(' • '),
-          unitPrice: currentBuilderPrice,
-          qty: 1,
-        },
-      ];
-    });
-
-    setToastMsg(`Собранный «${builderDrink.name}» добавлен в предзаказ`);
-    setTimeout(() => setToastMsg(''), 2500);
-    setBuilderDrink(null);
-    setDrawerOpen(true);
-  };
-
-  const updateCartQty = (cartKey, delta) => {
+  const updateCartQty = (key, delta) => {
     setCart((prev) =>
       prev
-        .map((c) => (c.cartKey === cartKey ? { ...c, qty: c.qty + delta } : c))
+        .map((c) => (c.key === key ? { ...c, qty: Math.min(10, c.qty + delta) } : c))
         .filter((c) => c.qty > 0)
     );
   };
 
-  const removeCartItem = (cartKey) => {
-    setCart((prev) => prev.filter((c) => c.cartKey !== cartKey));
-  };
+  const removeFromCart = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
+  const cartCount = cart.reduce((acc, c) => acc + c.qty, 0);
+  const cartTotal = cart.reduce((acc, c) => acc + c.price * c.qty, 0);
+  const selectedLocation = COFFEE_LOCATIONS.find((l) => l.id === locationId) || COFFEE_LOCATIONS[0];
 
-  const totalItemsCount = useMemo(
-    () => cart.reduce((sum, c) => sum + c.qty, 0),
-    [cart]
-  );
-
-  const totalOrderPrice = useMemo(
-    () => cart.reduce((sum, c) => sum + c.unitPrice * c.qty, 0),
-    [cart]
-  );
-
-  const handleCheckoutSubmit = (e) => {
+  const handleCheckout = (e) => {
     e.preventDefault();
-    if (cart.length === 0) {
-      setCheckoutError('Корзина пуста. Добавьте напиток или выпечку.');
+    if (!cart.length) return;
+    if (customerPhone.trim().length < 7) {
+      setOrderError('Укажите номер телефона — пришлём уведомление о готовности.');
       return;
     }
-    if (!customerName.trim() || customerPhone.trim().length < 6) {
-      setCheckoutError('Укажите ваше имя (для надписи на стакане) и номер телефона.');
-      return;
-    }
-    setCheckoutError('');
-    setCompletedOrder({
-      number: `R01-${Math.floor(10 + Math.random() * 89)}`,
-      items: [...cart],
-      total: totalOrderPrice,
-      location: pickupLocation,
-      readyIn: pickupTime,
-      name: customerName.trim(),
-      phone: customerPhone.trim(),
-    });
+    setOrderError('');
+    setOrderDone(true);
     setCart([]);
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F1EA] text-[#231B15] font-sans pb-24 selection:bg-[#4A3222] selection:text-white">
-      {toastMsg && (
-        <div className="fixed top-20 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#4A3222] text-white text-xs font-medium">
-          <CheckCircleIcon className="w-4 h-4 text-white shrink-0" />
-          <span>{toastMsg}</span>
-        </div>
-      )}
-
-      {/* 5. Строгая верхняя полоса кофейни ROASTERY 01 */}
-      <header className="sticky top-0 z-40 bg-[#FCFBF8] border-b border-[#E2DCD0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-base font-bold tracking-tight text-[#231B15] font-mono">
-              ROASTERY 01
-            </span>
-            <span className="hidden sm:inline-block text-xs text-[#6B5B4F] border-l border-[#E2DCD0] pl-4">
-              Specialty Coffee & Bakery • Астана
-            </span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8 text-xs font-medium uppercase tracking-wider text-[#6B5B4F]">
-            <a href="#menu" className="hover:text-[#231B15] transition">
-              Меню-борд
-            </a>
-            <a href="#roastery" className="hover:text-[#231B15] transition">
-              Обжарочный цех
-            </a>
-            <a href="#locations" className="hover:text-[#231B15] transition">
-              Локации (3)
-            </a>
-          </nav>
-
+    <>
+      <ShowcaseHeader
+        brand="ROASTERY 01"
+        subtitle="Specialty Coffee · Astana"
+        nav={[
+          { label: 'Меню и конструктор', href: '#menu' },
+          { label: 'Кофейни', href: '#locations' },
+        ]}
+        rightSlot={
           <button
             type="button"
-            onClick={() => {
-              setCompletedOrder(null);
-              setDrawerOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md bg-[#4A3222] hover:bg-[#382519] text-white text-xs font-medium transition"
+            onClick={() => setCartOpen(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 text-xs font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
           >
-            <ShoppingBagIcon className="w-4 h-4" />
-            <span>Предзаказ</span>
-            <span className="px-2 py-0.5 rounded-sm bg-[#231B15] text-white text-[11px] font-mono">
-              {totalItemsCount} • {totalOrderPrice.toLocaleString('ru-RU')} ₸
-            </span>
+            <ShoppingBagIcon className="h-4 w-4 text-[var(--accent)]" />
+            <span>To-Go ({cartCount})</span>
           </button>
+        }
+      />
+
+      {/* Hero */}
+      <section id="top" className="relative isolate flex min-h-[95svh] flex-col justify-end overflow-hidden pt-28">
+        <div className="absolute inset-0 -z-20">
+          <img
+            src="https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1800&q=85"
+            alt="ROASTERY 01 спешелти кофейня"
+            className="h-full w-full scale-105 object-cover opacity-35"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0908] via-[#0B0908]/75 to-[#0B0908]/35" />
+          <div className="absolute inset-0 bg-[radial-gradient(50vmax_50vmax_at_80%_20%,rgba(217,155,82,0.18),transparent_65%)]" />
         </div>
-      </header>
 
-      {/* 6. Редакционный Hero-блок кофейни */}
-      <section className="border-b border-[#E2DCD0] py-14 sm:py-20 bg-[#FCFBF8]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-          <div className="lg:col-span-7">
-            <div className="text-xs font-mono uppercase tracking-widest text-[#6B5B4F] mb-4">
-              BATCH ROASTED IN ASTANA • Q-GRADE 86+ • TO-GO SERVICE
-            </div>
+        <div className="container-x pb-12 md:pb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EASE }}
+            className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.22em] text-white/60"
+          >
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+              Собственная обжарка Probat · Q-Grade 87+
+            </span>
+            <span>3 кофейни в Астане · Предзаказ To-Go</span>
+          </motion.div>
 
-            <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-[#231B15] leading-[1.12]">
-              Городская кофейня собственной обжарки и ремесленная пекарня
-            </h1>
+          <MaskLines
+            as="h1"
+            trigger="mount"
+            play
+            delay={0.08}
+            className="font-grotesk text-[clamp(2.6rem,8.5vw,8.75rem)] font-semibold leading-[0.9] tracking-[-0.055em]"
+            lines={[
+              'Спешелти кофе',
+              <>
+                свежей{' '}
+                <span className="font-serif font-normal italic tracking-[-0.02em] text-[var(--accent)]">обжарки</span>
+              </>,
+            ]}
+          />
 
-            <p className="mt-5 text-base text-[#6B5B4F] leading-relaxed max-w-xl">
-              Нажмите на любой эспрессо-напиток в меню-борде ниже, чтобы выбрать объём стакана, растительное молоко и крафтовый сироп. Бариста приготовит заказ к вашему приходу в выбранной точке Астаны.
+          <div className="mt-10 grid gap-8 md:grid-cols-12 md:items-end">
+            <p className="max-w-md text-base leading-relaxed text-white/60 md:col-span-5 md:text-lg">
+              Соберите идеальный напиток в конструкторе — выберите объём, альтернативное молоко и крафтовый сироп, а мы
+              приготовим заказ точно к вашему приходу.
             </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <a
-                href="#menu"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#4A3222] hover:bg-[#382519] text-white font-medium text-xs uppercase tracking-wider transition"
-              >
-                <AdjustmentsHorizontalIcon className="w-4 h-4" />
-                <span>Перейти к меню-борду</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => openDrinkBuilder(COFFEE_MENU[0])}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[#F4F1EA] hover:bg-[#E7E1D5] text-[#231B15] font-medium text-xs uppercase tracking-wider border border-[#E2DCD0] transition"
-              >
-                <span>Настроить Флэт Уайт (от 1 490 ₸)</span>
-              </button>
+            <div className="flex flex-wrap gap-3 md:col-span-7 md:justify-end">
+              <AccentButton href="#menu">
+                <span>Собрать напиток</span>
+                <ArrowIcon className="h-4 w-4" />
+              </AccentButton>
+              <AccentButton href="#locations" variant="ghost" label="Локации в Астане" />
             </div>
           </div>
+        </div>
 
-          <div className="lg:col-span-5">
-            <div className="rounded-md overflow-hidden border border-[#E2DCD0] bg-[#F4F1EA]">
-              <img
-                src="https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1000&q=80"
-                alt="ROASTERY 01 Astana"
-                className="w-full h-72 sm:h-80 object-cover"
-              />
-              <div className="p-4 bg-[#FCFBF8] border-t border-[#E2DCD0] flex items-center justify-between text-xs font-mono">
-                <span className="text-[#231B15]">ЛОТ НЕДЕЛИ: ЭФИОПИЯ ИРГАЧЕФФ</span>
-                <span className="text-[#6B5B4F]">МЫТАЯ ОБРАБОТКА • Q-87.5</span>
-              </div>
-            </div>
-          </div>
+        <div className="border-y border-white/10 bg-[#0B0908]/80 py-4 backdrop-blur-md">
+          <Marquee
+            items={['Ethiopia Yirgacheffe', 'Oatly Barista', 'V60 Pour Over', 'Uji Matcha', 'Artisan Croissants', 'To-Go in 10 min']}
+            duration={34}
+            itemClassName="font-grotesk text-lg font-medium tracking-[-0.02em] text-white/75 md:text-2xl [&_.text-acid]:text-[var(--accent)]"
+          />
         </div>
       </section>
 
-      {/* 7. Меню-борд напитков и выпечки (таблично-редакционная сетка без шаблонных бейджей на фото) */}
-      <section id="menu" className="py-16 sm:py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#E2DCD0] mb-8">
-          <div>
-            <div className="text-xs font-mono uppercase tracking-widest text-[#6B5B4F] mb-1">
-              01 / Меню-борд и конструктор
+      {/* Menu */}
+      <section id="menu" className="py-24 md:py-36">
+        <div className="container-x">
+          <div className="mb-12 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div>
+              <AccentLabel index="01" label="Кофейная карта" className="mb-5" />
+              <MaskLines
+                lines={['Напитки и свежая', <span className="text-white/35">выпечка</span>]}
+                className="font-grotesk text-[clamp(2.2rem,5.5vw,5.25rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+              />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-[#231B15]">
-              Напитки и свежая выпечка
-            </h2>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  className={`rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.12em] transition ${
+                    category === c
+                      ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0B0908]'
+                      : 'border-white/15 text-white/60 hover:border-white/40 hover:text-white'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition border ${
-                  activeCategory === cat
-                    ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                    : 'bg-[#FCFBF8] text-[#6B5B4F] border-[#E2DCD0] hover:border-[#4A3222]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 border border-[#E2DCD0] rounded-md bg-[#FCFBF8] divide-y md:divide-y-0 md:grid-flow-row">
-          {filteredMenu.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => openDrinkBuilder(item)}
-              className="cursor-pointer group p-5 sm:p-6 border-b border-r border-[#E2DCD0] hover:bg-[#F8F5EE] transition flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <div className="text-[11px] font-mono uppercase text-[#6B5B4F]">
-                      {item.category} • {item.calories}
-                    </div>
-                    <h3 className="text-base font-semibold text-[#231B15] mt-0.5">
-                      {item.name}
-                    </h3>
-                  </div>
+          <SpotlightGrid className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((item) => (
+              <SpotlightCard key={item.id} innerClassName="flex flex-col">
+                <div className="relative aspect-[16/10] overflow-hidden bg-white/5">
                   <img
                     src={item.image}
                     alt={item.name}
-                    className="w-16 h-16 rounded-md object-cover border border-[#E2DCD0] shrink-0"
                     loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-700 ease-expo group-hover:scale-105"
                   />
-                </div>
-
-                <p className="text-xs text-[#6B5B4F] leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
-
-              <div className="mt-5 pt-3.5 border-t border-[#E2DCD0] flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-mono uppercase text-[#6B5B4F] block">
-                    {item.isCustomizable ? 'БАЗОВАЯ ЦЕНА (250 МЛ)' : 'ПОРЦИЯ'}
-                  </span>
-                  <span className="text-base font-mono font-semibold text-[#231B15]">
-                    {item.basePrice.toLocaleString('ru-RU')} ₸
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#101014] via-transparent to-black/20" />
+                  <span className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/50 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-white/90 backdrop-blur-md">
+                    {item.badge}
                   </span>
                 </div>
-
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#F4F1EA] group-hover:bg-[#4A3222] text-[#231B15] group-hover:text-white border border-[#E2DCD0] group-hover:border-[#4A3222] text-xs font-medium transition">
-                  {item.isCustomizable ? (
-                    <>
-                      <AdjustmentsHorizontalIcon className="w-3.5 h-3.5" />
-                      <span>Собрать стакан</span>
-                    </>
-                  ) : (
-                    <>
-                      <PlusIcon className="w-3.5 h-3.5" />
-                      <span>Добавить</span>
-                    </>
-                  )}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 8. Блок про обжарку зерна */}
-      <section id="roastery" className="py-16 bg-[#FCFBF8] border-y border-[#E2DCD0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-6">
-            <div className="text-xs font-mono uppercase tracking-widest text-[#6B5B4F] mb-2">
-              02 / Ростерия Probat UG-22
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-[#231B15] leading-tight">
-              Собственная обжарка зерна и водоподготовка в Астане
-            </h2>
-            <p className="mt-4 text-sm text-[#6B5B4F] leading-relaxed">
-              Мы обжариваем микролоты из Эфиопии, Колумбии, Кении и Бразилии в нашем цехе у EXPO. Каждая партия проверяется колориметром, а вода во всех кофейнях проходит 5 ступеней реминерализации под стандарты SCA.
-            </p>
-
-            <div className="mt-6 p-4 rounded-md bg-[#F4F1EA] border border-[#E2DCD0] flex items-center gap-3.5">
-              <img
-                src="https://randomuser.me/api/portraits/men/29.jpg"
-                alt="Адильжан Сапаров — Шеф-обжарщик"
-                className="w-11 h-11 rounded-full object-cover border border-neutral-200 shrink-0"
-              />
-              <div className="text-xs">
-                <div className="font-semibold text-[#231B15]">
-                  Адильжан Сапаров — Q-Grader и шеф-обжарщик ROASTERY 01
-                </div>
-                <div className="text-[#6B5B4F] mt-0.5">
-                  Открытые каппинги свежей обжарки каждую субботу в 12:00
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-3 gap-4 pt-6 border-t border-[#E2DCD0] font-mono">
-              <div>
-                <div className="text-lg font-semibold text-[#4A3222]">14 ДНЕЙ</div>
-                <div className="text-[11px] text-[#6B5B4F] mt-1">Макс. срок зерна с даты обжарки</div>
-              </div>
-              <div>
-                <div className="text-lg font-semibold text-[#231B15]">93.5 °C</div>
-                <div className="text-[11px] text-[#6B5B4F] mt-1">Экстракция на La Marzocco Linea PB</div>
-              </div>
-              <div>
-                <div className="text-lg font-semibold text-[#231B15]">4 ВИДА</div>
-                <div className="text-[11px] text-[#6B5B4F] mt-1">Альтернативного молока</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-6">
-            <div className="rounded-md overflow-hidden border border-[#E2DCD0]">
-              <img
-                src="https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1000&q=80"
-                alt="Обжарка кофе ROASTERY 01"
-                className="w-full h-80 object-cover"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 9. Локации кофейни в Астане */}
-      <section id="locations" className="py-16 sm:py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="pb-6 border-b border-[#E2DCD0] mb-8">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#6B5B4F] mb-1">
-            03 / Адреса кофеен
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-semibold text-[#231B15]">
-            Точки выдачи предзаказа в Астане
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 border border-[#E2DCD0] rounded-md divide-y md:divide-y-0 md:divide-x divide-[#E2DCD0] bg-[#FCFBF8]">
-          {COFFEE_LOCATIONS.map((loc, idx) => {
-            const isSelected = pickupLocation === loc.name;
-            return (
-              <div
-                key={loc.id}
-                className="p-6 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-3 font-mono text-xs">
-                    <span className="text-[#6B5B4F]">ЛОКАЦИЯ 0{idx + 1}</span>
-                    {isSelected && (
-                      <span className="px-2 py-0.5 rounded-sm bg-[#4A3222] text-white text-[10px]">
-                        ВЫБРАНА
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-base font-semibold text-[#231B15]">{loc.name}</h3>
-                  <div className="text-xs font-medium text-[#6B5B4F] mt-1">
-                    {loc.address}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-[#6B5B4F] mt-2 font-mono">
-                    <ClockIcon className="w-3.5 h-3.5" />
-                    <span>{loc.hours}</span>
-                  </div>
-                  <p className="text-xs text-[#6B5B4F] mt-3 pt-3 border-t border-[#E2DCD0]">
-                    {loc.features}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPickupLocation(loc.name);
-                    setToastMsg(`Точка выдачи: ${loc.name}`);
-                    setTimeout(() => setToastMsg(''), 2300);
-                  }}
-                  className={`mt-5 w-full py-2 rounded-md text-xs font-medium transition border ${
-                    isSelected
-                      ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                      : 'bg-[#F4F1EA] hover:bg-[#4A3222] text-[#231B15] hover:text-white border-[#E2DCD0] hover:border-[#4A3222]'
-                  }`}
-                >
-                  {isSelected ? 'Текущая точка выдачи' : 'Выбрать эту кофейню'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 10. Модальное окно конструктора напитка */}
-      {builderDrink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="relative w-full max-w-lg rounded-md bg-[#FCFBF8] border border-[#E2DCD0] text-[#231B15] p-6 max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => setBuilderDrink(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-md bg-[#F4F1EA] hover:bg-[#4A3222] hover:text-white transition"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-4 pb-5 border-b border-[#E2DCD0]">
-              <img
-                src={builderDrink.image}
-                alt={builderDrink.name}
-                className="w-16 h-16 rounded-md object-cover border border-[#E2DCD0]"
-              />
-              <div>
-                <span className="text-[11px] font-mono uppercase text-[#6B5B4F]">
-                  Параметры стакана
-                </span>
-                <h3 className="text-lg font-semibold text-[#231B15]">
-                  {builderDrink.name}
-                </h3>
-                <div className="text-xs text-[#6B5B4F] mt-0.5 font-mono">
-                  База: {builderDrink.basePrice.toLocaleString('ru-RU')} ₸
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-5 py-5">
-              <div>
-                <label className="block text-xs font-mono uppercase tracking-wider text-[#6B5B4F] mb-2">
-                  01 / Объём стакана
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {COFFEE_CUSTOMIZATION.sizes.map((sz) => {
-                    const active = selectedSize.id === sz.id;
-                    return (
-                      <button
-                        key={sz.id}
-                        type="button"
-                        onClick={() => setSelectedSize(sz)}
-                        className={`py-2.5 px-3 rounded-md border text-xs font-medium transition ${
-                          active
-                            ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                            : 'bg-[#F4F1EA] text-[#231B15] border-[#E2DCD0]'
-                        }`}
-                      >
-                        <div>{sz.label}</div>
-                        <div className="text-[11px] opacity-80 mt-0.5 font-mono">
-                          {sz.priceAdd === 0 ? '0 ₸' : `+${sz.priceAdd} ₸`}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono uppercase tracking-wider text-[#6B5B4F] mb-2">
-                  02 / Молоко
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {COFFEE_CUSTOMIZATION.milks.map((mk) => {
-                    const active = selectedMilk.id === mk.id;
-                    return (
-                      <button
-                        key={mk.id}
-                        type="button"
-                        onClick={() => setSelectedMilk(mk)}
-                        className={`py-2 px-3 rounded-md border text-left text-xs font-medium flex items-center justify-between transition ${
-                          active
-                            ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                            : 'bg-[#F4F1EA] text-[#231B15] border-[#E2DCD0]'
-                        }`}
-                      >
-                        <span>{mk.label}</span>
-                        <span className="font-mono">
-                          {mk.priceAdd === 0 ? '0 ₸' : `+${mk.priceAdd} ₸`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono uppercase tracking-wider text-[#6B5B4F] mb-2">
-                  03 / Сироп
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {COFFEE_CUSTOMIZATION.syrups.map((sr) => {
-                    const active = selectedSyrup.id === sr.id;
-                    return (
-                      <button
-                        key={sr.id}
-                        type="button"
-                        onClick={() => setSelectedSyrup(sr)}
-                        className={`py-2 px-3 rounded-md border text-left text-xs font-medium flex items-center justify-between transition ${
-                          active
-                            ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                            : 'bg-[#F4F1EA] text-[#231B15] border-[#E2DCD0]'
-                        }`}
-                      >
-                        <span>{sr.label}</span>
-                        <span className="font-mono">
-                          {sr.priceAdd === 0 ? '0 ₸' : `+${sr.priceAdd} ₸`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setExtraShot((prev) => !prev)}
-                  className={`w-full py-2.5 px-3.5 rounded-md border text-xs font-medium flex items-center justify-between transition ${
-                    extraShot
-                      ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                      : 'bg-[#F4F1EA] text-[#231B15] border-[#E2DCD0]'
-                  }`}
-                >
-                  <span>+ Дополнительный эспрессо-шот</span>
-                  <span className="font-mono">+350 ₸</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-[#E2DCD0] flex items-center justify-between gap-4">
-              <div>
-                <span className="text-xs text-[#6B5B4F] block">Стоимость стакана:</span>
-                <span className="text-xl font-mono font-semibold text-[#231B15]">
-                  {currentBuilderPrice.toLocaleString('ru-RU')} ₸
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={confirmAddFromBuilder}
-                className="px-5 py-2.5 rounded-md bg-[#4A3222] hover:bg-[#382519] text-white font-medium text-xs uppercase tracking-wider transition"
-              >
-                Добавить в заказ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 11. Боковая панель предзаказа «С собой» */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
-          <div className="w-full max-w-md bg-[#FCFBF8] text-[#231B15] h-full flex flex-col justify-between p-6 overflow-y-auto border-l border-[#E2DCD0]">
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-[#E2DCD0]">
-                <div className="flex items-center gap-2">
-                  <ShoppingBagIcon className="w-5 h-5 text-[#4A3222]" />
-                  <h3 className="text-base font-semibold">Предзаказ «С собой»</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  className="p-1.5 rounded-md bg-[#F4F1EA] hover:bg-[#4A3222] hover:text-white transition"
-                >
-                  <XMarkIcon className="w-4 h-4" />
-                </button>
-              </div>
-
-              {completedOrder ? (
-                <div className="mt-6 p-5 rounded-md bg-[#F4F1EA] border border-[#4A3222] space-y-4">
-                  <div className="flex items-center gap-3">
-                    <CheckCircleIcon className="w-6 h-6 text-[#4A3222] shrink-0" />
-                    <div>
-                      <div className="text-xs font-mono uppercase text-[#6B5B4F]">
-                        Талон заказа #{completedOrder.number}
-                      </div>
-                      <h4 className="text-base font-semibold text-[#231B15]">
-                        Передано на бар, {completedOrder.name}
-                      </h4>
+                <div className="flex flex-1 flex-col justify-between p-6">
+                  <div>
+                    <div className="flex items-center justify-between font-mono text-[11px] text-white/45">
+                      <span>{item.category}</span>
+                      <span>{item.calories}</span>
                     </div>
+                    <h3 className="mt-2 font-grotesk text-xl font-semibold tracking-[-0.02em]">{item.name}</h3>
+                    <p className="mt-2.5 text-sm leading-relaxed text-white/55">{item.description}</p>
                   </div>
-
-                  <div className="text-xs space-y-1.5 bg-[#FCFBF8] p-3.5 rounded-md border border-[#E2DCD0]">
-                    <div>
-                      <span className="text-[#6B5B4F]">Точка выдачи: </span>
-                      <span className="font-semibold">{completedOrder.location}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#6B5B4F]">Готовность: </span>
-                      <span className="font-semibold text-[#4A3222]">{completedOrder.readyIn}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#6B5B4F]">К оплате: </span>
-                      <span className="font-mono font-semibold">
-                        {completedOrder.total.toLocaleString('ru-RU')} ₸
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCompletedOrder(null);
-                      setDrawerOpen(false);
-                    }}
-                    className="w-full py-2.5 rounded-md bg-[#4A3222] text-white text-xs font-medium"
-                  >
-                    Закрыть окно
-                  </button>
-                </div>
-              ) : cart.length === 0 ? (
-                <div className="py-16 text-center">
-                  <p className="text-sm font-semibold text-[#231B15]">
-                    Список предзаказа пуст
-                  </p>
-                  <p className="text-xs text-[#6B5B4F] mt-1">
-                    Выберите напиток или выпечку в меню-борде.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-4 divide-y divide-[#E2DCD0] border border-[#E2DCD0] rounded-md bg-[#F4F1EA]">
-                  {cart.map((c) => (
-                    <div
-                      key={c.cartKey}
-                      className="p-3.5 flex items-start justify-between gap-3"
+                  <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+                    <span className="font-grotesk text-xl font-semibold text-[var(--accent)] tabular-nums">
+                      {item.isCustomizable ? `от ${formatKzt(item.basePrice)}` : formatKzt(item.basePrice)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => (item.isCustomizable ? openBuilder(item) : addToCart(item))}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white/85 transition hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[#0B0908]"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-[#231B15] truncate">
-                          {c.name}
-                        </div>
-                        <div className="text-[11px] text-[#6B5B4F] mt-0.5 leading-snug">
-                          {c.customSummary}
-                        </div>
-                        <div className="text-xs font-mono font-semibold text-[#4A3222] mt-1">
-                          {(c.unitPrice * c.qty).toLocaleString('ru-RU')} ₸
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => removeCartItem(c.cartKey)}
-                          className="text-[#6B5B4F] hover:text-[#231B15]"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                        <div className="flex items-center gap-1.5 bg-[#FCFBF8] px-2 py-1 rounded-md border border-[#E2DCD0]">
-                          <button
-                            type="button"
-                            onClick={() => updateCartQty(c.cartKey, -1)}
-                          >
-                            <MinusIcon className="w-3 h-3" />
-                          </button>
-                          <span className="text-xs font-mono font-semibold w-4 text-center">{c.qty}</span>
-                          <button
-                            type="button"
-                            onClick={() => updateCartQty(c.cartKey, 1)}
-                          >
-                            <PlusIcon className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {!completedOrder && cart.length > 0 && (
-              <form
-                onSubmit={handleCheckoutSubmit}
-                className="mt-6 pt-4 border-t border-[#E2DCD0] space-y-3"
-              >
-                {checkoutError && (
-                  <div className="p-2.5 rounded-md bg-[#F4F1EA] border border-[#4A3222] text-[#231B15] text-xs flex items-center gap-1.5">
-                    <ExclamationCircleIcon className="w-4 h-4 shrink-0" />
-                    <span>{checkoutError}</span>
+                      <PlusIcon className="h-3.5 w-3.5" />
+                      {item.isCustomizable ? 'Настроить' : 'В заказ'}
+                    </button>
                   </div>
-                )}
-
-                <div>
-                  <label className="block text-[11px] font-mono uppercase text-[#6B5B4F] mb-1">
-                    Точка самовывоза
-                  </label>
-                  <select
-                    value={pickupLocation}
-                    onChange={(e) => setPickupLocation(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-[#F4F1EA] border border-[#E2DCD0] text-xs font-medium"
-                  >
-                    {COFFEE_LOCATIONS.map((l) => (
-                      <option key={l.id} value={l.name}>
-                        {l.name} ({l.address})
-                      </option>
-                    ))}
-                  </select>
                 </div>
+              </SpotlightCard>
+            ))}
+          </SpotlightGrid>
+        </div>
+      </section>
 
+      {/* Locations */}
+      <section id="locations" className="border-t border-white/10 py-24 md:py-36">
+        <div className="container-x">
+          <AccentLabel index="02" label="Наши точки" className="mb-5" />
+          <MaskLines
+            lines={['Три кофейни', <span className="text-[var(--accent)]">в Астане</span>]}
+            className="mb-14 font-grotesk text-[clamp(2.2rem,5.5vw,5rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+          />
+          <SpotlightGrid className="grid gap-4 md:grid-cols-3">
+            {COFFEE_LOCATIONS.map((loc, idx) => (
+              <SpotlightCard key={loc.id} innerClassName="p-7 flex flex-col justify-between gap-6">
                 <div>
-                  <label className="block text-[11px] font-mono uppercase text-[#6B5B4F] mb-1">
-                    Время готовности
-                  </label>
+                  <span className="font-mono text-xs text-[var(--accent)]">0{idx + 1}</span>
+                  <h3 className="mt-3 font-grotesk text-xl font-semibold">{loc.name}</h3>
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-white/70">
+                    <MapPinIcon className="h-4 w-4 shrink-0 text-[var(--accent)]" />
+                    {loc.address}
+                  </p>
+                  <p className="mt-3 text-xs leading-relaxed text-white/50">{loc.features}</p>
+                </div>
+                <div className="border-t border-white/10 pt-4 font-mono text-[11px] text-white/45">{loc.hours}</div>
+              </SpotlightCard>
+            ))}
+          </SpotlightGrid>
+        </div>
+      </section>
+
+      {/* Drink Builder Modal */}
+      <AnimatePresence>
+        {customizing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+            onClick={() => setCustomizing(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 16 }}
+              transition={{ duration: 0.3, ease: EASE }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[28px] border border-white/15 bg-[#12100E] p-6 sm:p-8"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--accent)]">Конструктор напитка</p>
+                  <h3 className="mt-1 font-grotesk text-2xl font-semibold">{customizing.name}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustomizing(null)}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/60 hover:text-white"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-6">
+                <div>
+                  <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">Объём</p>
                   <div className="grid grid-cols-3 gap-2">
-                    {['Через 10 минут', 'Через 20 минут', 'Через 35 минут'].map((t) => (
+                    {COFFEE_CUSTOMIZATION.sizes.map((s) => (
                       <button
-                        key={t}
+                        key={s.id}
                         type="button"
-                        onClick={() => setPickupTime(t)}
-                        className={`py-2 rounded-md text-[11px] font-medium border ${
-                          pickupTime === t
-                            ? 'bg-[#4A3222] text-white border-[#4A3222]'
-                            : 'bg-[#F4F1EA] text-[#231B15] border-[#E2DCD0]'
+                        onClick={() => setSizeId(s.id)}
+                        className={`rounded-xl border px-3 py-2.5 text-xs font-medium transition ${
+                          sizeId === s.id
+                            ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0B0908]'
+                            : 'border-white/15 text-white/75'
                         }`}
                       >
-                        {t}
+                        <div>{s.label}</div>
+                        <div className="mt-0.5 font-mono text-[10px] opacity-80">
+                          {s.priceAdd ? `+${s.priceAdd} ₸` : 'База'}
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Имя на стакане *"
-                    className="px-3 py-2 rounded-md bg-[#F4F1EA] border border-[#E2DCD0] text-xs"
-                  />
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="+7 (707) 000-00-00 *"
-                    className="px-3 py-2 rounded-md bg-[#F4F1EA] border border-[#E2DCD0] text-xs"
-                  />
+                <div>
+                  <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">Молоко</p>
+                  <div className="flex flex-wrap gap-2">
+                    {COFFEE_CUSTOMIZATION.milks.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setMilkId(m.id)}
+                        className={`rounded-full border px-3.5 py-2 text-xs transition ${
+                          milkId === m.id
+                            ? 'border-[var(--accent)] bg-[var(--accent)] font-semibold text-[#0B0908]'
+                            : 'border-white/15 text-white/75'
+                        }`}
+                      >
+                        {m.label} {m.priceAdd > 0 && `(+${m.priceAdd} ₸)`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-xs font-medium text-[#6B5B4F]">Сумма предзаказа:</span>
-                  <span className="text-lg font-mono font-semibold text-[#231B15]">
-                    {totalOrderPrice.toLocaleString('ru-RU')} ₸
-                  </span>
+                <div>
+                  <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">Сироп</p>
+                  <div className="flex flex-wrap gap-2">
+                    {COFFEE_CUSTOMIZATION.syrups.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSyrupId(s.id)}
+                        className={`rounded-full border px-3.5 py-2 text-xs transition ${
+                          syrupId === s.id
+                            ? 'border-[var(--accent)] bg-[var(--accent)] font-semibold text-[#0B0908]'
+                            : 'border-white/15 text-white/75'
+                        }`}
+                      >
+                        {s.label} {s.priceAdd > 0 && `(+${s.priceAdd} ₸)`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              </div>
 
+              <div className="mt-8 flex items-center justify-between gap-4 border-t border-white/10 pt-5">
+                <div>
+                  <div className="font-mono text-[10px] uppercase text-white/45">Цена стакана</div>
+                  <div className="font-grotesk text-2xl font-semibold text-[var(--accent)] tabular-nums">
+                    {formatKzt(customPrice)}
+                  </div>
+                </div>
+                <AccentButton
+                  label="Добавить в To-Go"
+                  onClick={() =>
+                    addToCart(customizing, `${sizeObj.id} · ${milkObj.label} · ${syrupObj.label}`, customPrice)
+                  }
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Slide-over To-Go Cart Drawer */}
+      <AnimatePresence>
+        {cartOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm"
+            onClick={() => setCartOpen(false)}
+          >
+            <motion.aside
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.4, ease: EASE }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex h-full w-full max-w-md flex-col justify-between border-l border-white/10 bg-[#100E0D] p-6"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <h3 className="font-grotesk text-xl font-semibold">Предзаказ To-Go</h3>
                 <button
-                  type="submit"
-                  className="w-full py-3 rounded-md bg-[#4A3222] hover:bg-[#382519] text-white font-medium text-xs uppercase tracking-wider transition"
+                  type="button"
+                  onClick={() => setCartOpen(false)}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white/60 hover:text-white"
                 >
-                  Отправить заказ бариста
+                  <XMarkIcon className="h-4 w-4" />
                 </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+              </div>
 
-      {/* 12. Футер */}
-      <footer className="py-10 border-t border-[#E2DCD0] bg-[#FCFBF8] text-xs text-[#6B5B4F]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-mono font-semibold text-[#231B15]">
-            ROASTERY 01 • SPECIALTY COFFEE ASTANA
-          </div>
-          <div className="flex items-center gap-6">
-            <span className="flex items-center gap-1.5">
-              <MapPinIcon className="w-4 h-4 text-[#4A3222]" />
-              EXPO • Ботанический сад • Кенесары, 40
-            </span>
-          </div>
-        </div>
-      </footer>
-    </div>
+              <div className="my-5 flex-1 space-y-4 overflow-y-auto">
+                {orderDone ? (
+                  <div className="rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 p-6 text-center">
+                    <CheckIcon className="mx-auto h-10 w-10 text-[var(--accent)]" />
+                    <h4 className="mt-3 font-grotesk text-xl font-semibold">Заказ передан бариста!</h4>
+                    <p className="mt-2 text-xs text-white/70">
+                      {selectedLocation.name} ·{' '}
+                      {pickupTime === 'К точному времени' ? `к ${exactTime}` : pickupTime}. Напишем на {customerPhone},
+                      как только всё будет готово.
+                    </p>
+                  </div>
+                ) : cart.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-white/45">Корзина пуста — выберите кофе или выпечку.</p>
+                ) : (
+                  <>
+                    <ul className="space-y-2.5">
+                      {cart.map((entry) => (
+                        <li
+                          key={entry.key}
+                          className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold">{entry.item.name}</div>
+                            {entry.meta && <div className="mt-1 text-[11px] text-white/50">{entry.meta}</div>}
+                            <div className="mt-1.5 font-mono text-xs text-[var(--accent)]">
+                              {formatKzt(entry.price * entry.qty)}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => updateCartQty(entry.key, -1)}
+                              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-xs"
+                            >
+                              −
+                            </button>
+                            <span className="w-5 text-center font-mono text-xs">{entry.qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateCartQty(entry.key, 1)}
+                              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-xs"
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeFromCart(entry.key)}
+                              className="ml-1 text-white/40 hover:text-red-400"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="space-y-4 border-t border-white/10 pt-4">
+                      <div>
+                        <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+                          Кофейня
+                        </label>
+                        <select
+                          value={locationId}
+                          onChange={(e) => setLocationId(e.target.value)}
+                          className="w-full rounded-xl border border-white/15 bg-[#171412] px-3.5 py-2.5 text-xs text-white outline-none focus:border-[var(--accent)]"
+                        >
+                          {COFFEE_LOCATIONS.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PICKUP_TIMES.map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setPickupTime(t)}
+                            className={`rounded-full border px-3 py-1.5 text-[11px] transition ${
+                              pickupTime === t
+                                ? 'border-[var(--accent)] bg-[var(--accent)] font-semibold text-[#0B0908]'
+                                : 'border-white/15 text-white/65'
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      {pickupTime === 'К точному времени' && (
+                        <div>
+                          <label className="mb-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+                            Удобное время выдачи (08:00 – 22:00)
+                          </label>
+                          <input
+                            type="time"
+                            min="08:00"
+                            max="22:00"
+                            value={exactTime}
+                            onChange={(e) => setExactTime(e.target.value)}
+                            className="w-full rounded-xl border border-white/15 bg-[#171412] px-4 py-2.5 font-mono text-xs text-white outline-none focus:border-[var(--accent)]"
+                          />
+                        </div>
+                      )}
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Ваш телефон +7 (701) 000-00-00 *"
+                        className="w-full rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-xs text-white placeholder:text-white/35 outline-none focus:border-[var(--accent)]"
+                      />
+                      {orderError && <p className="text-xs text-red-400">{orderError}</p>}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {cart.length > 0 && (
+                <form onSubmit={handleCheckout} className="border-t border-white/10 pt-4">
+                  <div className="mb-4 flex items-baseline justify-between">
+                    <span className="font-mono text-xs uppercase text-white/50">К оплате</span>
+                    <span className="font-grotesk text-2xl font-semibold text-[var(--accent)] tabular-nums">
+                      {formatKzt(cartTotal)}
+                    </span>
+                  </div>
+                  <button
+                    type="submit"
+                    className="h-13 w-full rounded-full bg-[var(--accent)] py-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#0B0908] transition hover:bg-white"
+                  >
+                    Оформить предзаказ
+                  </button>
+                </form>
+              )}
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+export default function CoffeePage() {
+  return (
+    <ShowcaseShell title="ROASTERY 01 — Спешелти-кофейня в Астане" accent="#D99B52" bg="#0B0908">
+      <CoffeeContent />
+    </ShowcaseShell>
   );
 }

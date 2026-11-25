@@ -1,303 +1,211 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { motion, useScroll, useSpring } from 'framer-motion';
+import { CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import {
-  CalculatorIcon,
-  ClockIcon,
-  PhoneIcon,
-  ArrowsRightLeftIcon,
-  ExclamationCircleIcon,
-  ArrowRightIcon,
-  CheckIcon,
-} from '@heroicons/react/24/outline';
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import {
-  RENOVATION_TYPES,
-  RENOVATION_ADDONS,
   BEFORE_AFTER_SCENES,
+  RENOVATION_ADDONS,
   RENOVATION_PORTFOLIO,
   RENOVATION_STEPS,
+  RENOVATION_TYPES,
 } from '../data/renovationData';
+import MaskLines from '../home/components/ui/MaskLines';
+import Marquee from '../home/components/ui/Marquee';
+import { ArrowIcon } from '../home/components/ui/MagneticButton';
+import {
+  AccentButton,
+  AccentLabel,
+  EASE,
+  ShowcaseHeader,
+  ShowcaseShell,
+  SpotlightCard,
+  SpotlightGrid,
+  formatKzt,
+} from '../showcase/ShowcaseShell';
 
-// 1. Страница ремонта квартир «STROY LINE ASTANA»: строгая архитектурно-инженерная сетка (#FFFFFF фон, #F4F5F7 блоки, #E2E8F0 линии, #1D4ED8 синий)
-export default function RenovationPage() {
-  // 2. Состояния калькулятора стоимости ремонта
-  const [areaSqm, setAreaSqm] = useState(76);
-  const [selectedTypeId, setSelectedTypeId] = useState('capital');
-  const [propertyKind, setPropertyKind] = useState('newbuild');
-  const [selectedAddons, setSelectedAddons] = useState(['rough-materials', 'post-cleaning']);
+function RenovationContent() {
+  const [area, setArea] = useState(76);
+  const [typeId, setTypeId] = useState('capital');
+  const [addonIds, setAddonIds] = useState(['design-project']);
+  const [sceneIdx, setSceneIdx] = useState(0);
+  const [sliderPos, setSliderPos] = useState(52);
 
-  // 3. Состояния интерактивного слайдера «До / После»
-  const [activeSceneIndex, setActiveSceneIndex] = useState(0);
-  const [sliderPercent, setSliderPercent] = useState(52);
-  const compareContainerRef = useRef(null);
-
-  // 4. Состояния формы вызова инженера-замерщика
   const [leadName, setLeadName] = useState('');
   const [leadPhone, setLeadPhone] = useState('');
-  const [leadComplex, setLeadComplex] = useState('');
-  const [leadDate, setLeadDate] = useState('Завтра до обеда (10:00 – 13:00)');
   const [leadError, setLeadError] = useState('');
-  const [leadSubmitted, setLeadSubmitted] = useState(null);
+  const [leadSent, setLeadSent] = useState(false);
 
-  const currentType = useMemo(
-    () => RENOVATION_TYPES.find((t) => t.id === selectedTypeId) || RENOVATION_TYPES[1],
-    [selectedTypeId]
-  );
+  const timelineRef = useRef(null);
+  const { scrollYProgress } = useScroll({ target: timelineRef, offset: ['start 75%', 'end 60%'] });
+  const lineFill = useSpring(scrollYProgress, { stiffness: 140, damping: 28 });
 
-  // 5. Мгновенный расчёт стоимости ремонта в ₸ и сроков в днях
-  const calculationResult = useMemo(() => {
-    const baseWorkCost = areaSqm * currentType.ratePerSqm;
-    const secondaryMultiplier = propertyKind === 'secondary' ? 1.12 : 1.0;
-    const adjustedWorkCost = Math.round(baseWorkCost * secondaryMultiplier);
+  const selectedType = RENOVATION_TYPES.find((t) => t.id === typeId) || RENOVATION_TYPES[1];
 
+  const estimate = useMemo(() => {
+    const baseCost = area * selectedType.ratePerSqm;
+    const baseDays = Math.round(area * selectedType.daysPerSqm);
     let addonsCost = 0;
-    let addonsExtraDays = 0;
-
-    RENOVATION_ADDONS.forEach((addon) => {
-      if (selectedAddons.includes(addon.id)) {
-        addonsCost += addon.pricePerSqm * areaSqm + addon.fixedPrice;
-        addonsExtraDays += addon.extraDays;
+    let extraDays = 0;
+    RENOVATION_ADDONS.forEach((a) => {
+      if (addonIds.includes(a.id)) {
+        addonsCost += a.fixedPrice + a.pricePerSqm * area;
+        extraDays += a.extraDays;
       }
     });
-
-    const totalCost = adjustedWorkCost + addonsCost;
-    const baseDays = Math.round(areaSqm * currentType.daysPerSqm);
-    const secondaryDays = propertyKind === 'secondary' ? 8 : 0;
-    const totalDays = Math.max(18, baseDays + secondaryDays + addonsExtraDays);
-
+    const total = baseCost + addonsCost;
     return {
-      workCost: adjustedWorkCost,
-      addonsCost,
-      totalCost,
-      totalDays,
-      pricePerSqmTotal: Math.round(totalCost / areaSqm),
+      total,
+      perSqm: Math.round(total / area),
+      days: baseDays + extraDays,
     };
-  }, [areaSqm, currentType, propertyKind, selectedAddons]);
+  }, [area, selectedType, addonIds]);
 
-  const toggleAddon = (addonId) => {
-    setSelectedAddons((prev) =>
-      prev.includes(addonId) ? prev.filter((id) => id !== addonId) : [...prev, addonId]
-    );
-  };
+  const toggleAddon = (id) =>
+    setAddonIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  // 6. Управление слайдером «До / После»
-  const updateSliderFromClientX = (clientX) => {
-    if (!compareContainerRef.current) return;
-    const rect = compareContainerRef.current.getBoundingClientRect();
-    const offsetX = clientX - rect.left;
-    const rawPercent = (offsetX / rect.width) * 100;
-    setSliderPercent(Math.min(96, Math.max(4, Math.round(rawPercent))));
-  };
+  const scene = BEFORE_AFTER_SCENES[sceneIdx];
 
-  const handlePointerMove = (e) => {
-    if (e.buttons === 1) {
-      updateSliderFromClientX(e.clientX);
-    }
-  };
-
-  const handleTouchMove = (e) => {
-    if (e.touches && e.touches[0]) {
-      updateSliderFromClientX(e.touches[0].clientX);
-    }
-  };
-
-  const handleLeadSubmit = (e) => {
+  const handleLead = (e) => {
     e.preventDefault();
-    if (!leadName.trim() || leadPhone.trim().length < 6) {
-      setLeadError('Пожалуйста, введите ваше имя и номер телефона для связи с инженером.');
+    if (leadName.trim().length < 2 || leadPhone.trim().length < 7) {
+      setLeadError('Укажите имя и телефон — инженер приедет на бесплатный лазерный замер.');
       return;
     }
     setLeadError('');
-    setLeadSubmitted({
-      ticket: `SL-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: leadName.trim(),
-      phone: leadPhone.trim(),
-      complex: leadComplex.trim() || 'г. Астана (уточнить адрес)',
-      visitSlot: leadDate,
-      area: areaSqm,
-      tariff: currentType.name,
-      estimatedCost: calculationResult.totalCost,
-      estimatedDays: calculationResult.totalDays,
-    });
+    setLeadSent(true);
   };
 
-  const currentScene = BEFORE_AFTER_SCENES[activeSceneIndex];
-
   return (
-    <div className="min-h-screen bg-[#FFFFFF] text-[#0F172A] font-sans pb-24 selection:bg-[#1D4ED8] selection:text-white">
-      {/* 7. Инженерная шапка STROY LINE ASTANA */}
-      <header className="sticky top-0 z-40 bg-[#FFFFFF] border-b border-[#E2E8F0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-base font-bold tracking-tight text-[#0F172A] font-mono">
-              STROY LINE ASTANA
-            </span>
-            <span className="hidden sm:inline-block text-xs text-[#475569] border-l border-[#E2E8F0] pl-4">
-              Лицензия СМР II категории • Договор
-            </span>
-          </div>
+    <>
+      <ShowcaseHeader
+        brand="STROY LINE"
+        subtitle="Astana · Engineering"
+        nav={[
+          { label: 'Калькулятор', href: '#calc' },
+          { label: 'До / После', href: '#compare' },
+          { label: 'Объекты', href: '#portfolio' },
+          { label: 'Этапы', href: '#steps' },
+        ]}
+        ctaLabel="Вызвать инженера"
+        ctaHref="#calc"
+      />
 
-          <nav className="hidden md:flex items-center gap-8 text-xs font-medium uppercase tracking-wider text-[#475569]">
-            <a href="#calculator" className="hover:text-[#0F172A] transition">
-              01 / Сметный калькулятор
-            </a>
-            <a href="#before-after" className="hover:text-[#0F172A] transition">
-              02 / До и После
-            </a>
-            <a href="#portfolio" className="hover:text-[#0F172A] transition">
-              03 / Реестр объектов
-            </a>
-            <a href="#steps" className="hover:text-[#0F172A] transition">
-              04 / Регламент
-            </a>
-          </nav>
-
-          <a
-            href="#measurer-form"
-            className="px-4 py-2 rounded-md bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium text-xs uppercase tracking-wider transition"
-          >
-            Вызов инженера
-          </a>
+      {/* Hero */}
+      <section id="top" className="relative isolate flex min-h-[95svh] flex-col justify-end overflow-hidden pt-28">
+        <div className="absolute inset-0 -z-20">
+          <img
+            src="/renovation-interior.jpg"
+            alt="STROY LINE ASTANA интерьер"
+            className="h-full w-full scale-105 object-cover opacity-30"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#090B0E] via-[#090B0E]/75 to-[#090B0E]/40" />
+          <div aria-hidden className="hero-grid absolute inset-0 opacity-[0.07]" />
+          <div className="absolute inset-0 bg-[radial-gradient(50vmax_50vmax_at_80%_20%,rgba(59,130,246,0.2),transparent_65%)]" />
         </div>
-      </header>
 
-      {/* 8. Строгий архитектурный Hero-блок */}
-      <section className="bg-[#F4F5F7] border-b border-[#E2E8F0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-            <div className="lg:col-span-7">
-              <div className="text-xs font-mono uppercase tracking-widest text-[#1D4ED8] mb-4">
-                ИНЖЕНЕРНЫЙ РЕМОНТ КВАРТИР • АСТАНА • ФИКСИРОВАННАЯ СМЕТА
-              </div>
+        <div className="container-x pb-12 md:pb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EASE }}
+            className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.22em] text-white/60"
+          >
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+              Фиксированная смета в ₸ · Гарантия 3 года
+            </span>
+            <span>ЖК Астаны · СНиП РК & Технадзор</span>
+          </motion.div>
 
-              <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-[#0F172A] leading-[1.12]">
-                Ремонт квартир по техническому регламенту от 45 000 ₸/м²
-              </h1>
+          <MaskLines
+            as="h1"
+            trigger="mount"
+            play
+            delay={0.08}
+            className="font-grotesk text-[clamp(2.4rem,8vw,8.25rem)] font-semibold leading-[0.9] tracking-[-0.055em]"
+            lines={[
+              'Инженерный ремонт',
+              <>
+                с точностью{' '}
+                <span className="font-serif font-normal italic tracking-[-0.02em] text-[var(--accent)]">до 1 мм</span>
+              </>,
+            ]}
+          />
 
-              <p className="mt-5 text-base text-[#475569] leading-relaxed max-w-xl">
-                Выполняем полный цикл ремонтно-отделочных работ в новостройках Астаны. Поэтапная приёмка по чек-листу технадзора, снабжение черновыми материалами со склада и официальная гарантия 36 месяцев.
-              </p>
-
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <a
-                  href="#calculator"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium text-xs uppercase tracking-wider transition"
-                >
-                  <CalculatorIcon className="w-4 h-4" />
-                  <span>Рассчитать ведомость работ</span>
-                </a>
-                <a
-                  href="#before-after"
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[#FFFFFF] hover:bg-slate-100 text-[#0F172A] font-medium text-xs uppercase tracking-wider border border-[#E2E8F0] transition"
-                >
-                  <span>Сравнение До / После</span>
-                </a>
-              </div>
-            </div>
-
-            <div className="lg:col-span-5">
-              <div className="rounded-md overflow-hidden border border-[#E2E8F0] bg-[#FFFFFF]">
-                <img
-                  src="/renovation-interior.jpg"
-                  alt="Готовый ремонт квартиры в Астане"
-                  className="w-full h-72 object-cover"
-                />
-                <div className="p-4 border-t border-[#E2E8F0] flex items-center justify-between text-xs font-mono">
-                  <span className="text-[#0F172A]">ОБЪЕКТ: ЖК SEZIM QALA • 84 М²</span>
-                  <span className="text-[#1D4ED8]">СРОК: 65 ДНЕЙ</span>
-                </div>
-              </div>
+          <div className="mt-10 grid gap-8 md:grid-cols-12 md:items-end">
+            <p className="max-w-md text-base leading-relaxed text-white/60 md:col-span-5 md:text-lg">
+              Рассчитайте точную стоимость и сроки ремонта в Астане онлайн, сравните реальные объекты «До / После» и
+              зафиксируйте цену в договоре.
+            </p>
+            <div className="flex flex-wrap gap-3 md:col-span-7 md:justify-end">
+              <AccentButton href="#calc">
+                <span>Рассчитать смету</span>
+                <ArrowIcon className="h-4 w-4" />
+              </AccentButton>
+              <AccentButton href="#compare" variant="ghost" label="Смотреть До / После" />
             </div>
           </div>
+        </div>
 
-          <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 border border-[#E2E8F0] rounded-md bg-[#FFFFFF] divide-y lg:divide-y-0 lg:divide-x divide-[#E2E8F0]">
-            <div className="p-4 sm:p-5">
-              <div className="text-xs font-mono uppercase text-[#475569]">Сдано объектов</div>
-              <div className="text-xl font-semibold text-[#0F172A] mt-1">140+ квартир</div>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="text-xs font-mono uppercase text-[#475569]">Смета в договоре</div>
-              <div className="text-xl font-semibold text-[#1D4ED8] mt-1">Фиксированная</div>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="text-xs font-mono uppercase text-[#475569]">Гарантийный срок</div>
-              <div className="text-xl font-semibold text-[#0F172A] mt-1">36 месяцев</div>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="text-xs font-mono uppercase text-[#475569]">Оплата этапов</div>
-              <div className="text-xl font-semibold text-[#0F172A] mt-1">По акту приёмки</div>
-            </div>
-          </div>
+        <div className="border-y border-white/10 bg-[#090B0E]/80 py-4 backdrop-blur-md">
+          <Marquee
+            items={['Лазерный замер 0 ₸', 'Геометрия 90°', 'Rehau & Schneider', 'Теневые профили', 'Еженедельный фотоотчёт']}
+            duration={34}
+            itemClassName="font-grotesk text-lg font-medium tracking-[-0.02em] text-white/75 md:text-2xl [&_.text-acid]:text-[var(--accent)]"
+          />
         </div>
       </section>
 
-      {/* 9. Интерактивный сметный калькулятор */}
-      <section id="calculator" className="py-16 sm:py-20 bg-[#FFFFFF] border-b border-[#E2E8F0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="pb-6 border-b border-[#E2E8F0] mb-8">
-            <div className="text-xs font-mono uppercase tracking-wider text-[#1D4ED8] mb-1">
-              01 / Сметный калькулятор
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-[#0F172A]">
-              Параметрический расчёт бюджета и сроков
-            </h2>
-          </div>
+      {/* Parametric Calculator */}
+      <section id="calc" className="py-24 md:py-36">
+        <div className="container-x">
+          <AccentLabel index="01" label="Калькулятор сметы" className="mb-5" />
+          <MaskLines
+            lines={['Параметрический', <span className="text-white/35">расчёт бюджета</span>]}
+            className="mb-14 font-grotesk text-[clamp(2.2rem,5.5vw,5rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+          />
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Панель ввода параметров */}
-            <div className="lg:col-span-7 bg-[#F4F5F7] rounded-md border border-[#E2E8F0] p-6 sm:p-8 space-y-7">
+          <div className="grid gap-8 lg:grid-cols-12">
+            <div className="space-y-8 rounded-[28px] border border-white/10 bg-[#0F1218] p-6 sm:p-8 lg:col-span-8">
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-mono uppercase text-[#0F172A]">
-                    01. Площадь объекта по техпаспорту
-                  </label>
-                  <span className="px-3 py-1 rounded-md bg-[#1D4ED8] text-white font-mono text-sm font-semibold">
-                    {areaSqm} м²
-                  </span>
+                <div className="flex items-baseline justify-between">
+                  <span className="font-mono text-xs uppercase tracking-[0.18em] text-white/50">Площадь квартиры</span>
+                  <span className="font-grotesk text-4xl font-semibold text-[var(--accent)] tabular-nums">{area} м²</span>
                 </div>
                 <input
                   type="range"
                   min={30}
                   max={200}
-                  step={1}
-                  value={areaSqm}
-                  onChange={(e) => setAreaSqm(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-300 rounded-md appearance-none cursor-pointer accent-[#1D4ED8]"
+                  step={2}
+                  value={area}
+                  onChange={(e) => setArea(Number(e.target.value))}
+                  className="mt-4 h-2 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[#3B82F6]"
                 />
-                <div className="flex justify-between text-xs text-[#475569] font-mono mt-1.5">
+                <div className="mt-2 flex justify-between font-mono text-[11px] text-white/40">
                   <span>30 м²</span>
-                  <span>80 м²</span>
-                  <span>140 м²</span>
+                  <span>115 м²</span>
                   <span>200 м²</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-mono uppercase text-[#0F172A] mb-3">
-                  02. Тарифный регламент работ
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <p className="mb-3 font-mono text-xs uppercase tracking-[0.18em] text-white/50">Класс ремонта</p>
+                <div className="grid gap-3 md:grid-cols-3">
                   {RENOVATION_TYPES.map((t) => {
-                    const active = selectedTypeId === t.id;
+                    const active = t.id === typeId;
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => setSelectedTypeId(t.id)}
-                        className={`text-left p-4 rounded-md border transition bg-[#FFFFFF] ${
+                        onClick={() => setTypeId(t.id)}
+                        className={`rounded-2xl border p-4 text-left transition ${
                           active
-                            ? 'border-[#1D4ED8]'
-                            : 'border-[#E2E8F0] hover:border-slate-400'
+                            ? 'border-[var(--accent)] bg-[var(--accent)]/15'
+                            : 'border-white/10 bg-white/[0.02] hover:border-white/25'
                         }`}
                       >
-                        <div className="text-xs font-mono font-semibold text-[#1D4ED8]">
-                          {t.ratePerSqm.toLocaleString('ru-RU')} ₸/м²
-                        </div>
-                        <div className="text-sm font-semibold text-[#0F172A] mt-0.5">
-                          {t.name}
-                        </div>
-                        <p className="text-[11px] text-[#475569] mt-1.5 leading-snug">
-                          {t.description}
-                        </p>
+                        <div className="font-grotesk text-base font-semibold">{t.name}</div>
+                        <div className="mt-1 font-mono text-xs text-[var(--accent)]">{formatKzt(t.ratePerSqm)} / м²</div>
+                        <p className="mt-2 text-xs leading-relaxed text-white/55">{t.description}</p>
                       </button>
                     );
                   })}
@@ -305,79 +213,28 @@ export default function RenovationPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono uppercase text-[#0F172A] mb-3">
-                  03. Состояние жилого фонда
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPropertyKind('newbuild')}
-                    className={`py-3 px-4 rounded-md border text-left transition bg-[#FFFFFF] ${
-                      propertyKind === 'newbuild'
-                        ? 'border-[#1D4ED8]'
-                        : 'border-[#E2E8F0]'
-                    }`}
-                  >
-                    <div className="text-xs font-semibold text-[#0F172A]">
-                      Новостройка (Черновая / Предчистовая)
-                    </div>
-                    <div className="text-[11px] text-[#475569] mt-0.5">
-                      Базовый коэффициент 1.0
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPropertyKind('secondary')}
-                    className={`py-3 px-4 rounded-md border text-left transition bg-[#FFFFFF] ${
-                      propertyKind === 'secondary'
-                        ? 'border-[#1D4ED8]'
-                        : 'border-[#E2E8F0]'
-                    }`}
-                  >
-                    <div className="text-xs font-semibold text-[#0F172A]">
-                      Вторичный фонд (+12% демонтаж)
-                    </div>
-                    <div className="text-[11px] text-[#475569] mt-0.5">
-                      Демонтаж старых покрытий и вывоз
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono uppercase text-[#0F172A] mb-3">
-                  04. Ведомость дополнительных опций
-                </label>
-                <div className="divide-y divide-[#E2E8F0] border border-[#E2E8F0] rounded-md bg-[#FFFFFF]">
-                  {RENOVATION_ADDONS.map((addon) => {
-                    const checked = selectedAddons.includes(addon.id);
-                    const addonTotal = addon.pricePerSqm * areaSqm + addon.fixedPrice;
+                <p className="mb-3 font-mono text-xs uppercase tracking-[0.18em] text-white/50">Дополнительные опции</p>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {RENOVATION_ADDONS.map((a) => {
+                    const checked = addonIds.includes(a.id);
                     return (
                       <button
-                        key={addon.id}
+                        key={a.id}
                         type="button"
-                        onClick={() => toggleAddon(addon.id)}
-                        className={`w-full text-left px-4 py-3 transition flex items-center justify-between gap-3 ${
-                          checked ? 'bg-slate-50' : 'hover:bg-slate-50/60'
+                        onClick={() => toggleAddon(a.id)}
+                        className={`flex items-start justify-between gap-3 rounded-2xl border p-4 text-left transition ${
+                          checked
+                            ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+                            : 'border-white/10 bg-white/[0.02] hover:border-white/25'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-4 h-4 rounded-sm flex items-center justify-center shrink-0 ${
-                              checked
-                                ? 'bg-[#1D4ED8] text-white'
-                                : 'bg-[#F4F5F7] border border-[#E2E8F0]'
-                            }`}
-                          >
-                            {checked && <CheckIcon className="w-3 h-3" />}
-                          </div>
-                          <span className="text-xs sm:text-sm font-medium text-[#0F172A]">
-                            {addon.label}
-                          </span>
-                        </div>
-                        <span className="text-xs font-mono font-semibold text-[#1D4ED8] shrink-0">
-                          +{addonTotal.toLocaleString('ru-RU')} ₸
+                        <span className="text-xs leading-relaxed text-white/80">{a.label}</span>
+                        <span
+                          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border ${
+                            checked ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-white/25'
+                          }`}
+                        >
+                          {checked && <CheckIcon className="h-3.5 w-3.5" />}
                         </span>
                       </button>
                     );
@@ -386,434 +243,235 @@ export default function RenovationPage() {
               </div>
             </div>
 
-            {/* Правая сводная ведомость сметы */}
-            <div className="lg:col-span-5 bg-[#F4F5F7] text-[#0F172A] rounded-md border border-[#E2E8F0] p-6 sm:p-8 sticky top-24">
-              <div className="text-xs uppercase tracking-widest text-[#1D4ED8] font-mono">
-                Сводная ведомость расчёта
-              </div>
-              <h3 className="text-lg font-semibold mt-1">
-                {currentType.name} • {areaSqm} м²
-              </h3>
-
-              <div className="mt-5 p-5 rounded-md bg-[#FFFFFF] border border-[#E2E8F0]">
-                <div className="text-xs font-mono uppercase text-[#475569]">Итоговая оценка бюджета:</div>
-                <div className="text-3xl font-mono font-semibold text-[#1D4ED8] mt-1">
-                  {calculationResult.totalCost.toLocaleString('ru-RU')} ₸
-                </div>
-                <div className="text-xs text-[#475569] mt-1 font-mono">
-                  Удельная ставка: {calculationResult.pricePerSqmTotal.toLocaleString('ru-RU')} ₸/м²
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-2.5 text-xs font-mono border-b border-[#E2E8F0] pb-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#475569]">СТРОИТЕЛЬНО-МОНТАЖНЫЕ РАБОТЫ:</span>
-                  <span className="font-semibold">
-                    {calculationResult.workCost.toLocaleString('ru-RU')} ₸
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#475569]">МАТЕРИАЛЫ И ДОП. ОПЦИИ:</span>
-                  <span className="font-semibold">
-                    {calculationResult.addonsCost.toLocaleString('ru-RU')} ₸
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#475569]">НОРМАТИВНЫЙ СРОК:</span>
-                  <span className="px-2 py-0.5 rounded-sm bg-[#1D4ED8] text-white font-semibold">
-                    {calculationResult.totalDays} ДНЕЙ
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-2">
-                <div className="text-xs font-mono uppercase text-[#475569]">
-                  Базовый состав работ:
-                </div>
-                {currentType.includes.map((inc) => (
-                  <div key={inc} className="flex items-center gap-2 text-xs text-[#0F172A]">
-                    <CheckIcon className="w-3.5 h-3.5 text-[#1D4ED8] shrink-0" />
-                    <span>{inc}</span>
-                  </div>
-                ))}
-              </div>
-
-              <a
-                href="#measurer-form"
-                className="mt-6 w-full inline-flex items-center justify-center gap-2 py-3 rounded-md bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium text-xs uppercase tracking-wider transition"
-              >
-                <span>Заказать выезд инженера-сметчика</span>
-                <ArrowRightIcon className="w-4 h-4" />
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 10. Интерактивный слайдер сравнения «До / После» */}
-      <section id="before-after" className="py-16 sm:py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#E2E8F0] mb-8">
-          <div>
-            <div className="text-xs font-mono uppercase tracking-wider text-[#1D4ED8] mb-1">
-              02 / Визуальная инспекция
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-[#0F172A]">
-              Сравнение состояния «До / После»
-            </h2>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {BEFORE_AFTER_SCENES.map((scene, idx) => (
-              <button
-                key={scene.id}
-                type="button"
-                onClick={() => {
-                  setActiveSceneIndex(idx);
-                  setSliderPercent(50);
-                }}
-                className={`px-3.5 py-2 rounded-md text-xs font-medium transition border ${
-                  activeSceneIndex === idx
-                    ? 'bg-[#1D4ED8] text-white border-[#1D4ED8]'
-                    : 'bg-[#F4F5F7] text-[#475569] border-[#E2E8F0] hover:text-[#0F172A]'
-                }`}
-              >
-                Объект 0{idx + 1}: {scene.title.split('—')[0]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-md bg-[#F4F5F7] border border-[#E2E8F0] p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 font-mono text-xs">
-            <h3 className="text-sm font-semibold text-[#0F172A]">{currentScene.title}</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-1 rounded-sm bg-[#FFFFFF] border border-[#E2E8F0] text-[#475569]">
-                {currentScene.duration}
-              </span>
-              <span className="px-2.5 py-1 rounded-sm bg-[#1D4ED8] text-white">
-                {currentScene.budget}
-              </span>
-            </div>
-          </div>
-
-          <div
-            ref={compareContainerRef}
-            onMouseMove={handlePointerMove}
-            onTouchMove={handleTouchMove}
-            onClick={(e) => updateSliderFromClientX(e.clientX)}
-            className="relative w-full h-72 sm:h-[440px] rounded-md overflow-hidden select-none cursor-ew-resize border border-[#E2E8F0]"
-          >
-            <img
-              src={currentScene.afterImage}
-              alt="После ремонта"
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            />
-
-            <div
-              className="absolute inset-y-0 left-0 overflow-hidden pointer-events-none"
-              style={{ width: `${sliderPercent}%` }}
-            >
-              <img
-                src={currentScene.beforeImage}
-                alt="До ремонта"
-                className="w-full h-full object-cover max-w-none"
-                style={{
-                  width: compareContainerRef.current
-                    ? `${compareContainerRef.current.clientWidth}px`
-                    : '1200px',
-                }}
-              />
-            </div>
-
-            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-sm bg-[#0F172A] text-white text-xs font-mono">
-              {currentScene.beforeLabel}
-            </span>
-            <span className="absolute top-3 right-3 px-2.5 py-1 rounded-sm bg-[#1D4ED8] text-white text-xs font-mono">
-              {currentScene.afterLabel}
-            </span>
-
-            <div
-              className="absolute inset-y-0 w-0.5 bg-white pointer-events-none"
-              style={{ left: `${sliderPercent}%` }}
-            >
-              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-[#1D4ED8] border-2 border-white text-white flex items-center justify-center">
-                <ArrowsRightLeftIcon className="w-4 h-4" />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex items-center gap-4 font-mono">
-            <span className="text-xs text-[#475569] shrink-0">ЧЕРНОВАЯ (ДО)</span>
-            <input
-              type="range"
-              min={4}
-              max={96}
-              value={sliderPercent}
-              onChange={(e) => setSliderPercent(Number(e.target.value))}
-              className="w-full h-2 bg-slate-300 rounded-md appearance-none cursor-pointer accent-[#1D4ED8]"
-            />
-            <span className="text-xs text-[#0F172A] shrink-0">ЧИСТОВАЯ (ПОСЛЕ)</span>
-          </div>
-        </div>
-      </section>
-
-      {/* 11. Реестр сданных объектов в ЖК Астаны */}
-      <section id="portfolio" className="py-16 bg-[#F4F5F7] border-y border-[#E2E8F0]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="pb-6 border-b border-[#E2E8F0] mb-8">
-            <div className="text-xs font-mono uppercase tracking-wider text-[#1D4ED8] mb-1">
-              03 / Реестр сданных объектов
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-[#0F172A]">
-              Примеры выполненных проектов в Астане
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 border border-[#E2E8F0] rounded-md divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0] bg-[#FFFFFF]">
-            {RENOVATION_PORTFOLIO.map((obj) => (
-              <div
-                key={obj.id}
-                className="flex flex-col justify-between"
-              >
-                <div>
-                  <div className="h-52 border-b border-[#E2E8F0] overflow-hidden">
-                    <img
-                      src={obj.image}
-                      alt={obj.complex}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div className="p-6">
-                    <div className="text-xs font-mono uppercase text-[#1D4ED8]">
-                      {obj.complex}
-                    </div>
-                    <h3 className="text-base font-semibold text-[#0F172A] mt-1">{obj.type}</h3>
-
-                    <div className="mt-4 grid grid-cols-3 border border-[#E2E8F0] rounded-sm divide-x divide-[#E2E8F0] bg-[#F4F5F7] text-xs font-mono">
-                      <div className="p-2.5">
-                        <span className="text-[#475569] block text-[10px]">ПЛОЩАДЬ</span>
-                        <span className="font-semibold text-[#0F172A]">{obj.area}</span>
-                      </div>
-                      <div className="p-2.5">
-                        <span className="text-[#475569] block text-[10px]">СРОК</span>
-                        <span className="font-semibold text-[#0F172A]">{obj.days}</span>
-                      </div>
-                      <div className="p-2.5">
-                        <span className="text-[#475569] block text-[10px]">БЮДЖЕТ</span>
-                        <span className="font-semibold text-[#1D4ED8]">{obj.cost}</span>
-                      </div>
-                    </div>
-
-                    <ul className="mt-4 space-y-1.5">
-                      {obj.highlights.map((h) => (
-                        <li
-                          key={h}
-                          className="flex items-center gap-2 text-xs text-[#475569]"
-                        >
-                          <CheckIcon className="w-3.5 h-3.5 text-[#1D4ED8] shrink-0" />
-                          <span>{h}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 12. Регламент работы */}
-      <section id="steps" className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="pb-6 border-b border-[#E2E8F0] mb-8">
-          <div className="text-xs font-mono uppercase tracking-wider text-[#1D4ED8] mb-1">
-            04 / Производственный цикл
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-semibold text-[#0F172A]">
-            Регламент выполнения работ
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-5 border border-[#E2E8F0] rounded-md divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0] bg-[#F4F5F7]">
-          {RENOVATION_STEPS.map((st) => (
-            <div
-              key={st.step}
-              className="p-5 flex flex-col justify-between"
-            >
+            {/* Live Estimate Card */}
+            <aside className="flex flex-col justify-between rounded-[28px] border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl sm:p-8 lg:col-span-4">
               <div>
-                <div className="text-xs font-mono font-semibold text-[#1D4ED8]">
-                  ЭТАП {st.step}
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--accent)]">Предварительная смета</p>
+                <div className="mt-4 font-grotesk text-4xl font-semibold tracking-[-0.04em] tabular-nums">
+                  {formatKzt(estimate.total)}
                 </div>
-                <h3 className="text-sm font-semibold text-[#0F172A] mt-2">
-                  {st.title}
-                </h3>
-                <p className="text-xs text-[#475569] mt-2 leading-relaxed">
-                  {st.desc}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+                <div className="mt-2 flex gap-4 font-mono text-xs text-white/55">
+                  <span>{formatKzt(estimate.perSqm)} / м²</span>
+                  <span>·</span>
+                  <span>~ {estimate.days} дней</span>
+                </div>
 
-      {/* 13. Форма вызова инженера-замерщика */}
-      <section id="measurer-form" className="py-16 bg-[#F4F5F7] border-t border-[#E2E8F0]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="rounded-md bg-[#FFFFFF] border border-[#E2E8F0] p-6 sm:p-10">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E2E8F0] mb-6">
-              <div>
-                <div className="text-xs font-mono uppercase text-[#1D4ED8] mb-1">
-                  05 / Выездной замер по Астане — 0 ₸
-                </div>
-                <h2 className="text-2xl font-semibold text-[#0F172A]">
-                  Заявка на лазерный обмер и составление сметы
-                </h2>
+                <ul className="mt-6 space-y-2 border-y border-white/10 py-5 text-xs text-white/70">
+                  {selectedType.includes.map((inc) => (
+                    <li key={inc} className="flex items-start gap-2">
+                      <CheckIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
+                      <span>{inc}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              <div className="flex items-center gap-3 p-3 rounded-md bg-[#F4F5F7] border border-[#E2E8F0] text-xs shrink-0">
-                <img
-                  src="https://randomuser.me/api/portraits/men/41.jpg"
-                  alt="Главный инженер Серик Жумабаев"
-                  className="w-10 h-10 rounded-full object-cover border border-neutral-200"
-                />
-                <div>
-                  <div className="font-semibold text-[#0F172A]">Серик Жумабаев</div>
-                  <div className="text-[#475569]">Главный инженер-сметчик</div>
-                </div>
-              </div>
-            </div>
-
-            {leadSubmitted ? (
-              <div className="p-6 rounded-md bg-[#F4F5F7] border border-[#1D4ED8] text-[#0F172A]">
-                <div className="flex items-center gap-3 mb-3">
-                  <CheckCircleIcon className="w-6 h-6 text-[#1D4ED8] shrink-0" />
-                  <div>
-                    <div className="text-xs font-mono uppercase text-[#1D4ED8]">
-                      Заявка #{leadSubmitted.ticket} зарегистрирована
-                    </div>
-                    <h3 className="text-lg font-semibold text-[#0F172A]">
-                      Выезд инженера назначен, {leadSubmitted.name}
-                    </h3>
-                  </div>
-                </div>
-                <p className="text-sm text-[#475569]">
-                  Объект: <strong className="text-[#0F172A]">{leadSubmitted.complex}</strong> ({leadSubmitted.area} м², пакет «{leadSubmitted.tariff}»). Слот выезда: <strong className="text-[#0F172A]">{leadSubmitted.visitSlot}</strong>.
-                </p>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-xs text-[#475569]">
-                    Смета привязана к номеру {leadSubmitted.phone}
-                  </span>
+              {leadSent ? (
+                <div className="mt-6 rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/15 p-5 text-center">
+                  <CheckIcon className="mx-auto h-8 w-8 text-[var(--accent)]" />
+                  <p className="mt-2 font-semibold">Заявка на замер принята, {leadName}!</p>
+                  <p className="mt-1 text-xs text-white/65">Инженер свяжется по номеру {leadPhone}.</p>
                   <button
                     type="button"
-                    onClick={() => setLeadSubmitted(null)}
-                    className="px-4 py-2 rounded-md bg-[#1D4ED8] text-white text-xs font-medium"
+                    onClick={() => {
+                      setLeadSent(false);
+                      setLeadName('');
+                      setLeadPhone('');
+                    }}
+                    className="mt-4 rounded-full border border-white/20 px-4 py-1.5 text-[11px] text-white/80 hover:border-white"
                   >
                     Новая заявка
                   </button>
                 </div>
-              </div>
-            ) : (
-              <form onSubmit={handleLeadSubmit} className="space-y-4">
-                {leadError && (
-                  <div className="p-3 rounded-md bg-[#F4F5F7] border border-[#1D4ED8] text-[#0F172A] text-xs flex items-center gap-2 font-medium">
-                    <ExclamationCircleIcon className="w-4 h-4 text-[#1D4ED8] shrink-0" />
-                    <span>{leadError}</span>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-[#475569] mb-1">
-                      Ваше имя *
-                    </label>
-                    <input
-                      type="text"
-                      value={leadName}
-                      onChange={(e) => setLeadName(e.target.value)}
-                      placeholder="Например, Марат"
-                      className="w-full px-3.5 py-2.5 rounded-md bg-[#F4F5F7] border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#1D4ED8]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[#475569] mb-1">
-                      Контактный телефон *
-                    </label>
-                    <input
-                      type="tel"
-                      value={leadPhone}
-                      onChange={(e) => setLeadPhone(e.target.value)}
-                      placeholder="+7 (701) 000-00-00"
-                      className="w-full px-3.5 py-2.5 rounded-md bg-[#F4F5F7] border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#1D4ED8]"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-[#475569] mb-1">
-                      Жилой комплекс / адрес в Астане
-                    </label>
-                    <input
-                      type="text"
-                      value={leadComplex}
-                      onChange={(e) => setLeadComplex(e.target.value)}
-                      placeholder="Например: ЖК Sezim Qala, блок 4"
-                      className="w-full px-3.5 py-2.5 rounded-md bg-[#F4F5F7] border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#1D4ED8]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[#475569] mb-1">
-                      Удобное время для замера
-                    </label>
-                    <select
-                      value={leadDate}
-                      onChange={(e) => setLeadDate(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-md bg-[#F4F5F7] border border-[#E2E8F0] text-sm focus:outline-none focus:border-[#1D4ED8]"
-                    >
-                      <option>Завтра до обеда (10:00 – 13:00)</option>
-                      <option>Завтра после обеда (14:00 – 18:00)</option>
-                      <option>В эту субботу (выходной день)</option>
-                      <option>Согласовать по телефону</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="text-xs text-[#475569] font-mono">
-                    Параметры калькулятора: {areaSqm} м² • {calculationResult.totalCost.toLocaleString('ru-RU')} ₸
-                  </div>
+              ) : (
+                <form onSubmit={handleLead} className="mt-6 space-y-3">
+                  <input
+                    type="text"
+                    value={leadName}
+                    onChange={(e) => setLeadName(e.target.value)}
+                    placeholder="Ваше имя *"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3 text-xs text-white placeholder:text-white/40 outline-none focus:border-[var(--accent)]"
+                  />
+                  <input
+                    type="tel"
+                    value={leadPhone}
+                    onChange={(e) => setLeadPhone(e.target.value)}
+                    placeholder="Телефон +7 (701) 000-00-00 *"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3 text-xs text-white placeholder:text-white/40 outline-none focus:border-[var(--accent)]"
+                  />
+                  {leadError && <p className="text-xs text-red-400">{leadError}</p>}
                   <button
                     type="submit"
-                    className="px-6 py-3 rounded-md bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium text-xs uppercase tracking-wider transition"
+                    className="h-12 w-full rounded-full bg-[var(--accent)] text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-blue-400"
                   >
-                    Назначить выезд инженера
+                    Зафиксировать смету и замер
                   </button>
-                </div>
-              </form>
-            )}
+                </form>
+              )}
+            </aside>
           </div>
         </div>
       </section>
 
-      {/* 14. Футер */}
-      <footer className="py-10 bg-[#FFFFFF] border-t border-[#E2E8F0] text-[#475569] text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <strong className="text-[#0F172A]">ТОО «STROY LINE ASTANA»</strong> • г. Астана, пр. Туран, 30А, БЦ Turan Plaza, офис 408
+      {/* Before / After Interactive Slider */}
+      <section id="compare" className="border-t border-white/10 py-24 md:py-36">
+        <div className="container-x">
+          <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+            <div>
+              <AccentLabel index="02" label="Сравнение До / После" className="mb-5" />
+              <MaskLines
+                lines={['От бетона', <span className="text-[var(--accent)]">до заселения</span>]}
+                className="font-grotesk text-[clamp(2.2rem,5.5vw,5rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {BEFORE_AFTER_SCENES.map((s, idx) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSceneIdx(idx)}
+                  className={`rounded-full border px-4 py-2 text-xs font-medium transition ${
+                    sceneIdx === idx
+                      ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                      : 'border-white/15 text-white/60 hover:text-white'
+                  }`}
+                >
+                  Объект 0{idx + 1}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <span className="flex items-center gap-1.5">
-              <PhoneIcon className="w-4 h-4 text-[#1D4ED8]" />
-              +7 (7172) 91-04-55
-            </span>
-            <span className="flex items-center gap-1.5">
-              <ClockIcon className="w-4 h-4 text-[#1D4ED8]" />
-              Пн–Сб 09:00 – 20:00
-            </span>
+
+          <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#0F1218]">
+            <div className="relative aspect-[16/9] w-full select-none overflow-hidden">
+              <img src={scene.afterImage} alt={scene.afterLabel} className="h-full w-full object-cover" />
+              <div
+                className="absolute inset-0 overflow-hidden"
+                style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+              >
+                <img src={scene.beforeImage} alt={scene.beforeLabel} className="h-full w-full object-cover" />
+              </div>
+
+              <div
+                className="pointer-events-none absolute inset-y-0 w-0.5 bg-[var(--accent)] shadow-[0_0_20px_rgba(59,130,246,0.9)]"
+                style={{ left: `${sliderPos}%` }}
+              >
+                <span className="absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[var(--accent)] font-mono text-xs font-bold text-white shadow-xl">
+                  ⇄
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={5}
+                max={95}
+                value={sliderPos}
+                onChange={(e) => setSliderPos(Number(e.target.value))}
+                aria-label="Сравнить До и После"
+                className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
+              />
+
+              <span className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/65 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider backdrop-blur-md">
+                {scene.beforeLabel}
+              </span>
+              <span className="pointer-events-none absolute right-4 top-4 rounded-full border border-[var(--accent)]/60 bg-black/75 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white backdrop-blur-md">
+                {scene.afterLabel}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 p-6 text-sm">
+              <div className="font-grotesk text-lg font-semibold">{scene.title}</div>
+              <div className="flex flex-wrap gap-4 font-mono text-xs text-white/60">
+                <span>{scene.duration}</span>
+                <span className="text-[var(--accent)]">{scene.budget}</span>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
+
+      {/* Portfolio */}
+      <section id="portfolio" className="border-t border-white/10 py-24">
+        <div className="container-x">
+          <AccentLabel index="03" label="Сданные ЖК Астаны" className="mb-8" />
+          <SpotlightGrid className="grid gap-4 md:grid-cols-3">
+            {RENOVATION_PORTFOLIO.map((obj) => (
+              <SpotlightCard key={obj.id} innerClassName="flex flex-col">
+                <div className="aspect-[16/10] overflow-hidden">
+                  <img
+                    src={obj.image}
+                    alt={obj.complex}
+                    className="h-full w-full object-cover transition-transform duration-700 ease-expo group-hover:scale-105"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col justify-between p-6">
+                  <div>
+                    <div className="flex justify-between font-mono text-[11px] text-[var(--accent)]">
+                      <span>{obj.area}</span>
+                      <span>{obj.days}</span>
+                    </div>
+                    <h3 className="mt-2 font-grotesk text-xl font-semibold">{obj.complex}</h3>
+                    <p className="mt-1 text-xs text-white/55">{obj.type}</p>
+                    <ul className="mt-4 space-y-1.5 text-xs text-white/70">
+                      {obj.highlights.map((h) => (
+                        <li key={h} className="flex items-center gap-1.5">
+                          <CheckIcon className="h-3.5 w-3.5 text-[var(--accent)]" /> {h}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="mt-5 border-t border-white/10 pt-4 font-grotesk text-lg font-semibold tabular-nums">
+                    {obj.cost}
+                  </div>
+                </div>
+              </SpotlightCard>
+            ))}
+          </SpotlightGrid>
+        </div>
+      </section>
+
+      {/* Scroll Progress Steps */}
+      <section id="steps" className="border-t border-white/10 py-24 md:py-36">
+        <div className="container-x max-w-4xl">
+          <AccentLabel index="04" label="Этапы реализации" className="mb-10" />
+          <ol ref={timelineRef} className="relative">
+            <div aria-hidden className="absolute bottom-3 left-[11px] top-3 w-px bg-white/10">
+              <motion.div
+                style={{ scaleY: lineFill }}
+                className="h-full w-full origin-top bg-[var(--accent)] shadow-[0_0_12px_rgba(59,130,246,0.8)]"
+              />
+            </div>
+            {RENOVATION_STEPS.map((st) => (
+              <li key={st.step} className="relative pb-12 pl-12 last:pb-0">
+                <span className="absolute left-0 top-1.5 grid h-6 w-6 place-items-center rounded-full border border-[var(--accent)] bg-[#090B0E]">
+                  <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                </span>
+                <span className="font-mono text-xs text-[var(--accent)]">Этап {st.step}</span>
+                <h3 className="mt-1 font-grotesk text-2xl font-semibold tracking-tight">{st.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/60">{st.desc}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/10 py-10">
+        <div className="container-x flex flex-col items-start justify-between gap-4 text-xs text-white/45 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 font-mono uppercase tracking-[0.18em]">
+            <MapPinIcon className="h-4 w-4 text-[var(--accent)]" />
+            <span>STROY LINE ASTANA · Договор и технадзор</span>
+          </div>
+          <span className="font-mono">Гарантия на все работы — 36 месяцев</span>
+        </div>
       </footer>
-    </div>
+    </>
+  );
+}
+
+export default function RenovationPage() {
+  return (
+    <ShowcaseShell title="STROY LINE ASTANA — Инженерный ремонт квартир" accent="#3B82F6" bg="#090B0E">
+      <RenovationContent />
+    </ShowcaseShell>
   );
 }

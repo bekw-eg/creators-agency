@@ -1,669 +1,573 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
-  MagnifyingGlassIcon,
-  CalendarDaysIcon,
-  ClockIcon,
-  MapPinIcon,
-  PhoneIcon,
-  ExclamationCircleIcon,
   CheckIcon,
+  FireIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  PlusIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import { RESTAURANT_MENU, RESTAURANT_HALLS } from '../data/restaurantData';
+import { RESTAURANT_HALLS, RESTAURANT_MENU } from '../data/restaurantData';
+import MaskLines from '../home/components/ui/MaskLines';
+import Marquee from '../home/components/ui/Marquee';
+import { ArrowIcon } from '../home/components/ui/MagneticButton';
+import { useScrollTo } from '../home/providers/SmoothScroll';
+import {
+  AccentButton,
+  AccentLabel,
+  EASE,
+  ShowcaseHeader,
+  ShowcaseShell,
+  SpotlightCard,
+  SpotlightGrid,
+  formatKzt,
+} from '../showcase/ShowcaseShell';
 
-// 1. Страница ресторана «TERRA & FIRE»: редакционная гастрономическая вёрстка (#F6F3EE фон, #FFFFFF блоки, #E6DFD3 линии, #8C3B2B терракота)
-export default function RestaurantPage() {
-  // 2. Состояния для фильтрации меню, поиска и тегов
-  const [selectedCategory, setSelectedCategory] = useState('Все');
-  const [selectedTag, setSelectedTag] = useState('Все');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [tastingSelection, setTastingSelection] = useState(['dish-1', 'dish-7']);
+const COURSES = ['Все', 'Закуски', 'Горячее', 'Гриль', 'Десерты', 'Напитки'];
+const TAGS = ['Все теги', 'Хит', 'Шеф рекомендует', 'Острое', 'Новинка'];
+const RESERVE_DATES = (() => {
+  const res = [];
+  const fmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' });
+  for (let i = 0; i < 5; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    res.push({ id: d.toISOString().slice(0, 10), label: i === 0 ? 'Сегодня' : i === 1 ? 'Завтра' : fmt.format(d) });
+  }
+  return res;
+})();
 
-  // 3. Состояния формы бронирования столика
-  const [resDate, setResDate] = useState('2026-11-26');
-  const [resTime, setResTime] = useState('19:30');
-  const [resGuests, setResGuests] = useState(2);
-  const [resZone, setResZone] = useState('Основной зал');
-  const [resName, setResName] = useState('');
-  const [resPhone, setResPhone] = useState('');
-  const [resWishes, setResWishes] = useState('');
-  const [resError, setResError] = useState('');
-  const [resConfirmed, setResConfirmed] = useState(null);
+function RestaurantContent() {
+  const scrollTo = useScrollTo();
 
-  const categories = ['Все', 'Закуски', 'Горячее', 'Гриль', 'Десерты', 'Напитки'];
-  const tagFilters = ['Все', 'Хит', 'Острое', 'Шеф рекомендует', 'Новинка'];
+  const [course, setCourse] = useState('Все');
+  const [tag, setTag] = useState('Все теги');
+  const [query, setQuery] = useState('');
+  const [preOrder, setPreOrder] = useState([]);
 
-  // 4. Реактивная фильтрация блюд по категории, тегам и поисковому запросу
+  const [hallId, setHallId] = useState(RESTAURANT_HALLS[0].id);
+  const [dateId, setDateId] = useState(RESERVE_DATES[0].id);
+  const [guests, setGuests] = useState(2);
+  const [time, setTime] = useState('20:00');
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [reserved, setReserved] = useState(false);
+
   const filteredDishes = useMemo(() => {
     return RESTAURANT_MENU.filter((dish) => {
-      const matchCat =
-        selectedCategory === 'Все' || dish.category === selectedCategory;
-      const matchTag =
-        selectedTag === 'Все' || dish.tags.includes(selectedTag);
-      const q = searchQuery.trim().toLowerCase();
-      const matchSearch =
-        !q ||
-        dish.name.toLowerCase().includes(q) ||
-        dish.description.toLowerCase().includes(q);
-      return matchCat && matchTag && matchSearch;
+      if (course !== 'Все' && dish.category !== course) return false;
+      if (tag !== 'Все теги' && !dish.tags.includes(tag)) return false;
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        return dish.name.toLowerCase().includes(q) || dish.description.toLowerCase().includes(q);
+      }
+      return true;
     });
-  }, [selectedCategory, selectedTag, searchQuery]);
+  }, [course, tag, query]);
 
-  // 5. Подборка блюд к предзаказу для стола
-  const selectedTastingDishes = useMemo(
-    () => RESTAURANT_MENU.filter((d) => tastingSelection.includes(d.id)),
-    [tastingSelection]
-  );
+  const toggleDish = (dish) => {
+    setPreOrder((prev) => {
+      const exists = prev.find((i) => i.dish.id === dish.id);
+      if (exists) return prev.filter((i) => i.dish.id !== dish.id);
+      return [...prev, { dish, qty: 1 }];
+    });
+  };
 
-  const tastingTotal = useMemo(
-    () => selectedTastingDishes.reduce((sum, d) => sum + d.price, 0),
-    [selectedTastingDishes]
-  );
-
-  const toggleDishInTasting = (id) => {
-    setTastingSelection((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+  const updateDishQty = (id, delta) => {
+    setPreOrder((prev) =>
+      prev
+        .map((entry) => (entry.dish.id === id ? { ...entry, qty: Math.min(10, entry.qty + delta) } : entry))
+        .filter((entry) => entry.qty > 0)
     );
   };
 
-  const handleSelectHallForBooking = (hallName) => {
-    setResZone(hallName);
-    document.getElementById('reservation')?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const preOrderTotal = preOrder.reduce((acc, e) => acc + e.dish.price * e.qty, 0);
+  const preOrderCount = preOrder.reduce((acc, e) => acc + e.qty, 0);
+  const selectedHall = RESTAURANT_HALLS.find((h) => h.id === hallId) || RESTAURANT_HALLS[0];
+  const selectedDate = RESERVE_DATES.find((d) => d.id === dateId) || RESERVE_DATES[0];
 
-  const handleReservationSubmit = (e) => {
+  const handleReserve = async (e) => {
     e.preventDefault();
-    if (!resName.trim() || resPhone.trim().length < 6) {
-      setResError('Пожалуйста, укажите ваше имя и контактный телефон для подтверждения резерва.');
+    if (guestName.trim().length < 2 || guestPhone.trim().length < 7) {
+      setError('Пожалуйста, укажите ваше имя и телефон для подтверждения брони.');
       return;
     }
-    if (!resDate || !resTime) {
-      setResError('Выберите желаемую дату и время визита.');
-      return;
-    }
-    setResError('');
-    setResConfirmed({
-      id: `TF-${Math.floor(100 + Math.random() * 900)}`,
-      date: resDate,
-      time: resTime,
-      guests: resGuests,
-      zone: resZone,
-      name: resName.trim(),
-      phone: resPhone.trim(),
-      wishes: resWishes.trim(),
-      preselectedDishes: selectedTastingDishes,
-      preselectedSum: tastingTotal,
-    });
+    setError('');
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 900));
+    setSubmitting(false);
+    setReserved(true);
   };
 
   return (
-    <div className="min-h-screen bg-[#F6F3EE] text-[#1C1917] font-sans pb-24 selection:bg-[#8C3B2B] selection:text-white">
-      {/* 6. Верхняя навигация ресторана */}
-      <header className="sticky top-0 z-40 bg-[#FFFFFF] border-b border-[#E6DFD3]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="font-serif text-xl font-semibold tracking-tight text-[#1C1917]">
-              TERRA & FIRE
-            </span>
-            <span className="hidden sm:inline-block text-xs text-[#57534E] border-l border-[#E6DFD3] pl-4">
-              Wood-Fired Gastronomy • Бульвар Нуржол
-            </span>
-          </div>
+    <>
+      <ShowcaseHeader
+        brand="TERRA & FIRE"
+        subtitle="Open Fire Gastronomy"
+        nav={[
+          { label: 'Меню', href: '#menu' },
+          { label: 'Залы', href: '#halls' },
+          { label: 'Резерв стола', href: '#reserve' },
+        ]}
+        ctaLabel={preOrderCount ? `Бронь · ${preOrderCount} блюд` : 'Забронировать стол'}
+        ctaHref="#reserve"
+      />
 
-          <nav className="hidden md:flex items-center gap-8 text-xs uppercase tracking-wider text-[#57534E] font-medium">
-            <a href="#menu" className="hover:text-[#1C1917] transition">
-              Меню кухни
-            </a>
-            <a href="#halls" className="hover:text-[#1C1917] transition">
-              Залы
-            </a>
-            <a href="#reservation" className="hover:text-[#1C1917] transition">
-              Резерв стола
-            </a>
-          </nav>
-
-          <a
-            href="#reservation"
-            className="px-4 py-2 rounded-md bg-[#8C3B2B] hover:bg-[#743022] text-white text-xs font-medium uppercase tracking-wider transition"
-          >
-            Бронь стола
-          </a>
+      {/* Hero */}
+      <section id="top" className="relative isolate flex min-h-[95svh] flex-col justify-end overflow-hidden pt-28">
+        <div className="absolute inset-0 -z-20">
+          <img
+            src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1800&q=85"
+            alt="TERRA & FIRE ресторан"
+            className="h-full w-full scale-105 object-cover opacity-40"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0908] via-[#0B0908]/70 to-[#0B0908]/35" />
+          <div className="absolute inset-0 bg-[radial-gradient(50vmax_50vmax_at_80%_25%,rgba(224,90,58,0.18),transparent_65%)]" />
         </div>
-      </header>
 
-      {/* 7. Редакционный Hero-блок */}
-      <section className="border-b border-[#E6DFD3] py-14 sm:py-20 bg-[#FFFFFF]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-          <div className="lg:col-span-7">
-            <div className="text-xs font-mono uppercase tracking-widest text-[#8C3B2B] mb-4">
-              АСТАНА, УЛ. ДОСТЫК, 16 • ОТКРЫТЫЙ ОГОНЬ И ЭНОТЕКА
-            </div>
+        <div className="container-x pb-12 md:pb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EASE }}
+            className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.22em] text-white/60"
+          >
+            <span className="flex items-center gap-2">
+              <FireIcon className="h-4 w-4 text-[var(--accent)]" />
+              Испанский хоспер · Дровяная печь
+            </span>
+            <span>Бульвар Нуржол · Астана</span>
+          </motion.div>
 
-            <h1 className="font-serif text-3xl sm:text-5xl font-semibold text-[#1C1917] leading-[1.14]">
-              Гастрономия живого огня, выдержанного мяса и локальных фермерских продуктов
-            </h1>
+          <MaskLines
+            as="h1"
+            trigger="mount"
+            play
+            delay={0.08}
+            className="font-grotesk text-[clamp(2.6rem,8.5vw,8.75rem)] font-semibold leading-[0.9] tracking-[-0.055em]"
+            lines={[
+              'Гастрономия',
+              <>
+                живого{' '}
+                <span className="font-serif font-normal italic tracking-[-0.02em] text-[var(--accent)]">огня</span>
+              </>,
+            ]}
+          />
 
-            <p className="mt-5 text-base text-[#57534E] leading-relaxed max-w-xl">
-              Мы готовим в испанском хоспере и дровяной печи на углях карельской берёзы и яблони. Мраморная говядина 28-дневного влажного вызревания, дикая рыба и ремесленный хлеб собственной выпечки.
-            </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <a
-                href="#reservation"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#8C3B2B] hover:bg-[#743022] text-white font-medium text-xs uppercase tracking-wider transition"
-              >
-                <CalendarDaysIcon className="w-4 h-4" />
-                <span>Забронировать столик</span>
-              </a>
-              <a
-                href="#menu"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#F6F3EE] hover:bg-[#EAE4DA] text-[#1C1917] font-medium text-xs uppercase tracking-wider border border-[#E6DFD3] transition"
-              >
-                <span>Меню кухни ({RESTAURANT_MENU.length} блюд)</span>
-              </a>
-            </div>
-
-            {/* Бренд-шеф с реалистичной круглой аватаркой */}
-            <div className="mt-10 pt-6 border-t border-[#E6DFD3] flex items-center gap-3.5">
-              <img
-                src="https://randomuser.me/api/portraits/men/36.jpg"
-                alt="Бренд-шеф Руслан Бекетов"
-                className="w-11 h-11 rounded-full object-cover border border-neutral-200 shrink-0"
-              />
-              <div className="text-xs">
-                <div className="font-semibold text-[#1C1917]">
-                  Руслан Бекетов — Бренд-шеф TERRA & FIRE
-                </div>
-                <div className="text-[#57534E] mt-0.5">
-                  Собственная камера вызревания мяса и открытая кухня в основном зале
-                </div>
-              </div>
-            </div>
+          <div className="mt-10 grid gap-8 md:grid-cols-12 md:items-end">
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.9, delay: 0.3, ease: EASE }}
+              className="max-w-md text-base leading-relaxed text-white/60 md:col-span-5 md:text-lg"
+            >
+              Выдержанные стейки Prime, фермерские продукты Казахстана, винная карта на 180 позиций и открытая кухня в
+              сердце Левого берега.
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.9, delay: 0.4, ease: EASE }}
+              className="flex flex-wrap gap-3 md:col-span-7 md:justify-end"
+            >
+              <AccentButton href="#reserve">
+                <span>Забронировать стол</span>
+                <ArrowIcon className="h-4 w-4" />
+              </AccentButton>
+              <AccentButton href="#menu" variant="ghost" label="Смотреть меню" />
+            </motion.div>
           </div>
+        </div>
 
-          <div className="lg:col-span-5">
-            <div className="rounded-md overflow-hidden border border-[#E6DFD3] bg-[#F6F3EE]">
-              <img
-                src="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1000&q=80"
-                alt="Подача блюд TERRA & FIRE"
-                className="w-full h-80 object-cover"
-              />
-              <div className="p-4 bg-[#FFFFFF] border-t border-[#E6DFD3] flex items-center justify-between text-xs">
-                <span className="font-serif text-sm font-semibold text-[#1C1917]">
-                  Рибай Prime на берёзовых углях (380 г)
-                </span>
-                <span className="font-mono font-semibold text-[#8C3B2B]">
-                  14 500 ₸
-                </span>
-              </div>
-            </div>
-          </div>
+        <div className="border-y border-white/10 bg-[#0B0908]/80 py-4 backdrop-blur-md">
+          <Marquee
+            items={['Dry-Aged Prime', 'Wood Oven', 'Chef Tasting Set', 'Sommelier Selection', 'VIP Fireplace Hall']}
+            duration={34}
+            itemClassName="font-grotesk text-lg font-medium tracking-[-0.02em] text-white/75 md:text-2xl [&_.text-acid]:text-[var(--accent)]"
+          />
         </div>
       </section>
 
-      {/* 8. Интерактивное гастрономическое меню в редакционном табличном формате */}
-      <section id="menu" className="py-16 sm:py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#E6DFD3] mb-6">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-[#8C3B2B] font-mono mb-1">
-              01 / Гастрономическая карта
+      {/* Interactive Menu */}
+      <section id="menu" className="py-24 md:py-36">
+        <div className="container-x">
+          <div className="mb-10 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div>
+              <AccentLabel index="01" label="Авторское меню" className="mb-5" />
+              <MaskLines
+                lines={['Вкус огня', <span className="text-white/35">и сезонности</span>]}
+                className="font-grotesk text-[clamp(2.2rem,5.5vw,5.25rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+              />
             </div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#1C1917]">
-              Основное меню кухни
-            </h2>
+
+            <div className="relative w-full max-w-sm">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Поиск по блюдам и ингредиентам..."
+                className="w-full rounded-full border border-white/15 bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/40 outline-none focus:border-[var(--accent)]"
+              />
+            </div>
           </div>
 
-          <div className="relative w-full md:w-80">
-            <MagnifyingGlassIcon className="w-4 h-4 text-[#57534E] absolute left-3.5 top-3" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Поиск блюда или ингредиента..."
-              className="w-full pl-10 pr-4 py-2 rounded-md bg-[#FFFFFF] border border-[#E6DFD3] text-sm text-[#1C1917] placeholder:text-[#8A847C] focus:outline-none focus:border-[#8C3B2B]"
-            />
-          </div>
-        </div>
-
-        {/* Фильтры курса и тегов */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((cat) => (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {COURSES.map((c) => (
               <button
-                key={cat}
+                key={c}
                 type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-md text-xs font-medium uppercase tracking-wider transition border ${
-                  selectedCategory === cat
-                    ? 'bg-[#1C1917] text-white border-[#1C1917]'
-                    : 'bg-[#FFFFFF] text-[#57534E] border-[#E6DFD3] hover:border-[#1C1917]'
+                onClick={() => setCourse(c)}
+                className={`rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.12em] transition ${
+                  course === c
+                    ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0B0908]'
+                    : 'border-white/15 text-white/60 hover:border-white/40 hover:text-white'
                 }`}
               >
-                {cat}
+                {c}
               </button>
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-[#57534E] mr-1 font-mono">ОТМЕТКИ:</span>
-            {tagFilters.map((tag) => (
+          <div className="mb-10 flex flex-wrap gap-2">
+            {TAGS.map((t) => (
               <button
-                key={tag}
+                key={t}
                 type="button"
-                onClick={() => setSelectedTag(tag)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition border ${
-                  selectedTag === tag
-                    ? 'bg-[#8C3B2B] text-white border-[#8C3B2B]'
-                    : 'bg-[#FFFFFF] text-[#57534E] border-[#E6DFD3] hover:border-[#8C3B2B]'
+                onClick={() => setTag(t)}
+                className={`rounded-full px-3.5 py-1.5 font-mono text-[11px] transition ${
+                  tag === t ? 'bg-white/15 text-white' : 'text-white/45 hover:text-white'
                 }`}
               >
-                {tag}
+                #{t}
               </button>
             ))}
           </div>
-        </div>
 
-        {/* Редакционный двухколоночный список блюд */}
-        {filteredDishes.length === 0 ? (
-          <div className="p-10 rounded-md bg-[#FFFFFF] border border-[#E6DFD3]">
-            <p className="font-serif text-lg text-[#1C1917]">
-              По выбранному фильтру позиций не найдено
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedCategory('Все');
-                setSelectedTag('Все');
-                setSearchQuery('');
-              }}
-              className="mt-4 px-4 py-2 rounded-md bg-[#8C3B2B] text-white text-xs font-medium"
-            >
-              Сбросить параметры
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 border border-[#E6DFD3] rounded-md bg-[#FFFFFF] divide-y divide-[#E6DFD3]">
+          <SpotlightGrid className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredDishes.map((dish) => {
-              const inTasting = tastingSelection.includes(dish.id);
+              const inSet = preOrder.some((e) => e.dish.id === dish.id);
               return (
-                <div
-                  key={dish.id}
-                  className="p-5 sm:p-6 flex items-start justify-between gap-4 hover:bg-[#FAF8F4] transition md:odd:border-r md:odd:border-[#E6DFD3]"
-                >
-                  <img
-                    src={dish.image}
-                    alt={dish.name}
-                    className="w-20 h-20 rounded-md object-cover border border-[#E6DFD3] shrink-0"
-                    loading="lazy"
-                  />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-mono uppercase text-[#8C3B2B]">
-                        {dish.category} • {dish.weight}
-                      </span>
-                      {dish.tags.map((t) => (
+                <SpotlightCard key={dish.id} innerClassName="flex flex-col">
+                  <div className="relative aspect-[16/10] overflow-hidden bg-white/5">
+                    <img
+                      src={dish.image}
+                      alt={dish.name}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-700 ease-expo group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#101014] via-transparent to-black/20" />
+                    <div className="absolute left-4 top-4 flex flex-wrap gap-1.5">
+                      {dish.tags.map((tg) => (
                         <span
-                          key={t}
-                          className="text-[10px] font-mono px-1.5 py-0.5 rounded-sm bg-[#F6F3EE] border border-[#E6DFD3] text-[#57534E]"
+                          key={tg}
+                          className="rounded-full border border-white/15 bg-black/50 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/90 backdrop-blur-md"
                         >
-                          {t}
+                          {tg}
                         </span>
                       ))}
                     </div>
-
-                    <h3 className="font-serif text-base sm:text-lg font-semibold text-[#1C1917] mt-1 leading-snug">
-                      {dish.name}
-                    </h3>
-
-                    <p className="text-xs text-[#57534E] mt-1.5 leading-relaxed">
-                      {dish.description}
-                    </p>
-
-                    <div className="mt-3 pt-3 border-t border-[#E6DFD3] flex items-center justify-between gap-2">
-                      <span className="font-serif text-base font-semibold text-[#1C1917]">
-                        {dish.price.toLocaleString('ru-RU')} ₸
+                  </div>
+                  <div className="flex flex-1 flex-col justify-between p-6">
+                    <div>
+                      <div className="flex items-center justify-between font-mono text-[11px] text-white/45">
+                        <span>{dish.category}</span>
+                        <span>{dish.weight}</span>
+                      </div>
+                      <h3 className="mt-2 font-grotesk text-xl font-semibold leading-snug tracking-[-0.02em]">
+                        {dish.name}
+                      </h3>
+                      <p className="mt-2.5 text-sm leading-relaxed text-white/55">{dish.description}</p>
+                    </div>
+                    <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+                      <span className="font-grotesk text-xl font-semibold text-[var(--accent)] tabular-nums">
+                        {formatKzt(dish.price)}
                       </span>
                       <button
                         type="button"
-                        onClick={() => toggleDishInTasting(dish.id)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition border ${
-                          inTasting
-                            ? 'bg-[#1C1917] text-white border-[#1C1917]'
-                            : 'bg-[#F6F3EE] hover:bg-[#8C3B2B] text-[#1C1917] hover:text-white border-[#E6DFD3] hover:border-[#8C3B2B]'
+                        onClick={() => toggleDish(dish)}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] transition ${
+                          inSet
+                            ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0B0908]'
+                            : 'border-white/15 text-white/80 hover:border-[var(--accent)] hover:text-[var(--accent)]'
                         }`}
                       >
-                        {inTasting ? (
+                        {inSet ? (
                           <>
-                            <CheckIcon className="w-3.5 h-3.5" />
-                            <span>В сете стола</span>
+                            <CheckIcon className="h-3.5 w-3.5" /> В сете
                           </>
                         ) : (
-                          <span>Отметить к столу</span>
+                          <>
+                            <PlusIcon className="h-3.5 w-3.5" /> К столу
+                          </>
                         )}
                       </button>
                     </div>
                   </div>
-                </div>
+                </SpotlightCard>
               );
             })}
-          </div>
-        )}
+          </SpotlightGrid>
+        </div>
       </section>
 
-      {/* 9. Галерея залов ресторана */}
-      <section id="halls" className="py-16 bg-[#FFFFFF] border-y border-[#E6DFD3]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="pb-6 border-b border-[#E6DFD3] mb-8">
-            <div className="text-xs uppercase tracking-widest text-[#8C3B2B] font-mono mb-1">
-              02 / Зонирование ресторана
-            </div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#1C1917]">
-              Залы и всесезонная терраса
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 border border-[#E6DFD3] rounded-md divide-y md:divide-y-0 md:divide-x divide-[#E6DFD3] bg-[#F6F3EE]">
-            {RESTAURANT_HALLS.map((hall) => (
-              <div
-                key={hall.id}
-                className="flex flex-col justify-between"
-              >
-                <div>
-                  <div className="h-52 border-b border-[#E6DFD3] overflow-hidden">
-                    <img
-                      src={hall.image}
-                      alt={hall.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between text-xs font-mono text-[#8C3B2B]">
-                      <span>{hall.capacity}</span>
-                    </div>
-                    <h3 className="font-serif text-xl font-semibold text-[#1C1917] mt-1">
-                      {hall.name}
-                    </h3>
-                    <div className="text-xs font-medium text-[#57534E] mt-1">
-                      {hall.atmosphere}
-                    </div>
-                    <p className="text-xs text-[#57534E] mt-2.5 leading-relaxed">
-                      {hall.description}
-                    </p>
-                  </div>
+      {/* Halls */}
+      <section id="halls" className="border-t border-white/10 py-24 md:py-36">
+        <div className="container-x">
+          <AccentLabel index="02" label="Пространство" className="mb-5" />
+          <MaskLines
+            lines={['Три зала для', <span className="text-[var(--accent)]">вашего вечера</span>]}
+            className="mb-14 font-grotesk text-[clamp(2.2rem,5.5vw,5.25rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+          />
+          <SpotlightGrid className="grid gap-4 lg:grid-cols-3">
+            {RESTAURANT_HALLS.map((h) => (
+              <SpotlightCard key={h.id} innerClassName="flex flex-col">
+                <div className="relative aspect-[16/11] overflow-hidden">
+                  <img
+                    src={h.image}
+                    alt={h.name}
+                    className="h-full w-full object-cover transition-transform duration-700 ease-expo group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#101014] via-transparent to-transparent" />
+                  <span className="absolute right-4 top-4 rounded-full border border-white/20 bg-black/50 px-3 py-1 font-mono text-[11px] backdrop-blur-md">
+                    {h.capacity}
+                  </span>
                 </div>
-
-                <div className="px-6 pb-6">
+                <div className="flex flex-1 flex-col justify-between p-6">
+                  <div>
+                    <h3 className="font-grotesk text-2xl font-semibold tracking-tight">{h.name}</h3>
+                    <p className="mt-1 font-mono text-xs text-[var(--accent)]">{h.atmosphere}</p>
+                    <p className="mt-3 text-sm leading-relaxed text-white/55">{h.description}</p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => handleSelectHallForBooking(hall.name)}
-                    className="w-full py-2.5 rounded-md bg-[#FFFFFF] hover:bg-[#8C3B2B] text-[#1C1917] hover:text-white border border-[#E6DFD3] hover:border-[#8C3B2B] text-xs font-medium uppercase tracking-wider transition"
+                    onClick={() => {
+                      setHallId(h.id);
+                      setReserved(false);
+                      scrollTo('#reserve');
+                    }}
+                    className="mt-6 w-full rounded-full border border-white/15 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 transition hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[#0B0908]"
                   >
-                    Выбрать зал для резерва
+                    Выбрать этот зал
                   </button>
                 </div>
-              </div>
+              </SpotlightCard>
             ))}
-          </div>
+          </SpotlightGrid>
         </div>
       </section>
 
-      {/* 10. Форма бронирования столика */}
-      <section id="reservation" className="py-16 sm:py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-md bg-[#FFFFFF] border border-[#E6DFD3] p-6 sm:p-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E6DFD3] mb-8">
-            <div>
-              <div className="text-xs uppercase tracking-widest text-[#8C3B2B] font-mono mb-1">
-                03 / Онлайн-резерв
-              </div>
-              <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#1C1917]">
-                Бронирование стола
-              </h2>
-            </div>
+      {/* Reservation */}
+      <section id="reserve" className="border-t border-white/10 py-24 md:py-36">
+        <div className="container-x grid gap-8 lg:grid-cols-12">
+          <div className="lg:col-span-5">
+            <AccentLabel index="03" label="Резерв стола" className="mb-5" />
+            <MaskLines
+              lines={['Забронируйте', <span className="text-[var(--accent)]">вечер</span>]}
+              className="font-grotesk text-[clamp(2.2rem,5vw,4.5rem)] font-semibold leading-[0.95] tracking-[-0.05em]"
+            />
+            <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/55">
+              Можно предварительно выбрать блюда из меню выше — мы подадим закуски и вино точно к вашему приходу.
+            </p>
 
-            <div className="flex items-center gap-3 bg-[#F6F3EE] px-3.5 py-2.5 rounded-md border border-[#E6DFD3] shrink-0">
-              <img
-                src="https://randomuser.me/api/portraits/women/44.jpg"
-                alt="Старший хостес Анель"
-                className="w-10 h-10 rounded-full object-cover border border-neutral-200"
-              />
-              <div className="text-xs">
-                <div className="font-semibold text-[#1C1917]">Анель — Старший хостес</div>
-                <div className="text-[#57534E]">Служба гостеприимства</div>
+            {preOrder.length > 0 && (
+              <div className="mt-8 rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
+                <div className="mb-3 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--accent)]">
+                  <span>Предварительный сет ({preOrderCount})</span>
+                  <span>{formatKzt(preOrderTotal)}</span>
+                </div>
+                <ul className="space-y-2.5 text-xs">
+                  {preOrder.map(({ dish, qty }) => (
+                    <li key={dish.id} className="flex items-center justify-between gap-2 text-white/75">
+                      <span className="truncate">{dish.name}</span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => updateDishQty(dish.id, -1)}
+                          className="grid h-6 w-6 place-items-center rounded-full border border-white/15"
+                        >
+                          −
+                        </button>
+                        <span className="w-4 text-center font-mono">{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateDishQty(dish.id, 1)}
+                          className="grid h-6 w-6 place-items-center rounded-full border border-white/15"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleDish(dish)}
+                          className="ml-1 text-white/40 hover:text-red-400"
+                          aria-label="Удалить блюдо"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
+            )}
           </div>
 
-          {resConfirmed ? (
-            <div className="p-6 rounded-md bg-[#F6F3EE] border border-[#8C3B2B]">
-              <div className="flex items-center gap-3 mb-4">
-                <CheckCircleIcon className="w-6 h-6 text-[#8C3B2B] shrink-0" />
-                <div>
-                  <div className="text-xs uppercase tracking-widest text-[#8C3B2B] font-mono">
-                    Резерв подтверждён • #{resConfirmed.id}
-                  </div>
-                  <h3 className="font-serif text-xl font-semibold text-[#1C1917]">
-                    Ждём вас, {resConfirmed.name}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-y border-[#E6DFD3] text-xs">
-                <div>
-                  <span className="text-[#57534E] block">Дата</span>
-                  <span className="font-semibold text-sm text-[#1C1917]">{resConfirmed.date}</span>
-                </div>
-                <div>
-                  <span className="text-[#57534E] block">Время</span>
-                  <span className="font-semibold text-sm text-[#1C1917]">{resConfirmed.time}</span>
-                </div>
-                <div>
-                  <span className="text-[#57534E] block">Гостей</span>
-                  <span className="font-semibold text-sm text-[#1C1917]">{resConfirmed.guests} перс.</span>
-                </div>
-                <div>
-                  <span className="text-[#57534E] block">Зал</span>
-                  <span className="font-semibold text-sm text-[#8C3B2B]">{resConfirmed.zone}</span>
-                </div>
-              </div>
-
-              {resConfirmed.preselectedDishes.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-xs font-semibold text-[#1C1917] mb-2">
-                    Предварительный сет к столу ({resConfirmed.preselectedSum.toLocaleString('ru-RU')} ₸):
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {resConfirmed.preselectedDishes.map((d) => (
-                      <span
-                        key={d.id}
-                        className="px-2.5 py-1 rounded-md bg-[#FFFFFF] border border-[#E6DFD3] text-xs text-[#1C1917]"
-                      >
-                        {d.name} ({d.price.toLocaleString('ru-RU')} ₸)
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-                <span className="text-xs text-[#57534E]">
-                  Подтверждение отправлено на {resConfirmed.phone}
+          <div className="rounded-[28px] border border-white/10 bg-[#101014] p-6 sm:p-8 lg:col-span-7">
+            {reserved ? (
+              <div className="py-10 text-center">
+                <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[var(--accent)] text-[#0B0908]">
+                  <CheckIcon className="h-8 w-8" />
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setResConfirmed(null)}
-                  className="px-4 py-2 rounded-md bg-[#1C1917] text-white text-xs font-medium"
-                >
-                  Изменить бронь
-                </button>
+                <h3 className="mt-6 font-grotesk text-3xl font-semibold">Стол забронирован, {guestName}!</h3>
+                <p className="mx-auto mt-3 max-w-md text-sm text-white/60">
+                  {selectedHall.name} · {selectedDate.label} в {time} · {guests} гостей. Хостес подтвердит бронь по
+                  номеру {guestPhone}.
+                </p>
+                <div className="mt-8">
+                  <AccentButton variant="ghost" label="Изменить бронь" onClick={() => setReserved(false)} />
+                </div>
               </div>
-            </div>
-          ) : (
-            <form onSubmit={handleReservationSubmit} className="space-y-5">
-              {resError && (
-                <div className="p-3 rounded-md bg-[#F6F3EE] border border-[#8C3B2B] text-[#8C3B2B] text-xs flex items-center gap-2 font-medium">
-                  <ExclamationCircleIcon className="w-4 h-4 shrink-0" />
-                  <span>{resError}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            ) : (
+              <form onSubmit={handleReserve} className="space-y-6">
                 <div>
-                  <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                    Дата визита
+                  <label className="mb-2.5 block font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+                    Зал
                   </label>
-                  <div className="relative">
-                    <CalendarDaysIcon className="w-4 h-4 text-[#57534E] absolute left-3.5 top-3" />
-                    <input
-                      type="date"
-                      value={resDate}
-                      onChange={(e) => setResDate(e.target.value)}
-                      className="w-full pl-10 pr-3 py-2 rounded-md bg-[#F6F3EE] border border-[#E6DFD3] text-sm text-[#1C1917] focus:outline-none focus:border-[#8C3B2B]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                    Время
-                  </label>
-                  <div className="relative">
-                    <ClockIcon className="w-4 h-4 text-[#57534E] absolute left-3.5 top-3" />
-                    <select
-                      value={resTime}
-                      onChange={(e) => setResTime(e.target.value)}
-                      className="w-full pl-10 pr-3 py-2 rounded-md bg-[#F6F3EE] border border-[#E6DFD3] text-sm text-[#1C1917] focus:outline-none focus:border-[#8C3B2B]"
-                    >
-                      <option>13:00</option>
-                      <option>15:00</option>
-                      <option>18:00</option>
-                      <option>19:30</option>
-                      <option>20:30</option>
-                      <option>21:30</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                    Количество гостей
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    {[1, 2, 4, 6, 8].map((num) => (
+                  <div className="flex flex-wrap gap-2">
+                    {RESTAURANT_HALLS.map((h) => (
                       <button
-                        key={num}
+                        key={h.id}
                         type="button"
-                        onClick={() => setResGuests(num)}
-                        className={`flex-1 py-2 rounded-md text-xs font-semibold border transition ${
-                          resGuests === num
-                            ? 'bg-[#1C1917] text-white border-[#1C1917]'
-                            : 'bg-[#F6F3EE] text-[#1C1917] border-[#E6DFD3]'
+                        onClick={() => setHallId(h.id)}
+                        className={`rounded-full border px-4 py-2 text-xs font-medium transition ${
+                          hallId === h.id
+                            ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0B0908]'
+                            : 'border-white/15 text-white/70 hover:border-white/35'
                         }`}
                       >
-                        {num}
+                        {h.name}
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                  Зона размещения
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {['Основной зал', 'Всесезонная Терраса', 'Каминный VIP-зал'].map(
-                    (zone) => (
+                <div>
+                  <label className="mb-2.5 block font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+                    Дата
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {RESERVE_DATES.map((d) => (
                       <button
-                        key={zone}
+                        key={d.id}
                         type="button"
-                        onClick={() => setResZone(zone)}
-                        className={`py-2.5 px-4 rounded-md border text-xs font-medium transition ${
-                          resZone === zone
-                            ? 'bg-[#8C3B2B] text-white border-[#8C3B2B]'
-                            : 'bg-[#F6F3EE] text-[#1C1917] border-[#E6DFD3] hover:border-[#8C3B2B]'
+                        onClick={() => setDateId(d.id)}
+                        className={`rounded-full border px-4 py-2 text-xs font-medium transition ${
+                          dateId === d.id
+                            ? 'border-[var(--accent)] bg-[var(--accent)] text-[#0B0908]'
+                            : 'border-white/15 text-white/70 hover:border-white/35'
                         }`}
                       >
-                        {zone}
+                        {d.label}
                       </button>
-                    )
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                    Ваше имя *
-                  </label>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+                      Количество гостей
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[2, 4, 6, 8, 12].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setGuests(g)}
+                          className={`h-10 w-10 rounded-full border font-mono text-xs transition ${
+                            guests === g
+                              ? 'border-[var(--accent)] bg-[var(--accent)] font-semibold text-[#0B0908]'
+                              : 'border-white/15 text-white/70'
+                          }`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-2 block font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
+                      Время
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {['18:30', '19:30', '20:00', '21:00'].map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTime(t)}
+                          className={`rounded-full border px-3.5 py-2 font-mono text-xs transition ${
+                            time === t
+                              ? 'border-[var(--accent)] bg-[var(--accent)] font-semibold text-[#0B0908]'
+                              : 'border-white/15 text-white/70'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-5 sm:grid-cols-2">
                   <input
                     type="text"
-                    value={resName}
-                    onChange={(e) => setResName(e.target.value)}
-                    placeholder="Например, Динара"
-                    className="w-full px-3.5 py-2 rounded-md bg-[#F6F3EE] border border-[#E6DFD3] text-sm text-[#1C1917] focus:outline-none focus:border-[#8C3B2B]"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Ваше имя *"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[var(--accent)]"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                    Контактный телефон *
-                  </label>
                   <input
                     type="tel"
-                    value={resPhone}
-                    onChange={(e) => setResPhone(e.target.value)}
-                    placeholder="+7 (702) 000-00-00"
-                    className="w-full px-3.5 py-2 rounded-md bg-[#F6F3EE] border border-[#E6DFD3] text-sm text-[#1C1917] focus:outline-none focus:border-[#8C3B2B]"
+                    value={guestPhone}
+                    onChange={(e) => setGuestPhone(e.target.value)}
+                    placeholder="Телефон +7 (701) 000-00-00 *"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3.5 text-sm text-white placeholder:text-white/35 outline-none focus:border-[var(--accent)]"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-[#57534E] mb-1.5">
-                  Пожелания к столу
-                </label>
-                <input
-                  type="text"
-                  value={resWishes}
-                  onChange={(e) => setResWishes(e.target.value)}
-                  placeholder="Столик у окна, детский стульчик и т.д."
-                  className="w-full px-3.5 py-2 rounded-md bg-[#F6F3EE] border border-[#E6DFD3] text-sm text-[#1C1917] focus:outline-none focus:border-[#8C3B2B]"
+                {error && <p className="text-xs text-red-400">{error}</p>}
+
+                <AccentButton
+                  type="submit"
+                  disabled={submitting}
+                  label={submitting ? 'Бронируем…' : 'Подтвердить резерв'}
+                  className="w-full sm:w-auto"
                 />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-md bg-[#8C3B2B] hover:bg-[#743022] text-white font-medium text-xs uppercase tracking-wider transition"
-              >
-                Подтвердить резерв ({resZone} • {resGuests} гостей)
-              </button>
-            </form>
-          )}
+              </form>
+            )}
+          </div>
         </div>
       </section>
 
-      {/* 11. Футер */}
-      <footer className="py-10 border-t border-[#E6DFD3] bg-[#FFFFFF] text-xs text-[#57534E]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-serif text-base font-semibold text-[#1C1917]">
-            TERRA & FIRE • АСТАНА
+      <footer className="border-t border-white/10 py-10">
+        <div className="container-x flex flex-col items-start justify-between gap-4 text-xs text-white/45 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 font-mono uppercase tracking-[0.18em]">
+            <MapPinIcon className="h-4 w-4 text-[var(--accent)]" />
+            <span>TERRA & FIRE · Астана, бульвар Нуржол, 12</span>
           </div>
-          <div className="flex flex-wrap items-center gap-6">
-            <span className="flex items-center gap-1.5">
-              <MapPinIcon className="w-4 h-4 text-[#8C3B2B]" />
-              ул. Достык, 16 (бульвар Нуржол)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <ClockIcon className="w-4 h-4 text-[#8C3B2B]" />
-              12:00 – 00:00
-            </span>
-            <span className="flex items-center gap-1.5">
-              <PhoneIcon className="w-4 h-4 text-[#8C3B2B]" />
-              +7 (7172) 79-40-15
-            </span>
-          </div>
+          <span className="font-mono">Ежедневно 12:00 – 00:00</span>
         </div>
       </footer>
-    </div>
+    </>
+  );
+}
+
+export default function RestaurantPage() {
+  return (
+    <ShowcaseShell title="TERRA & FIRE — Ресторан авторской кухни в Астане" accent="#E05A3A" bg="#0B0908">
+      <RestaurantContent />
+    </ShowcaseShell>
   );
 }
