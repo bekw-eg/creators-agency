@@ -114,13 +114,6 @@ export const CASES = SHOWCASE_PROJECTS.map((p) => ({
   tags: CASE_TAGS[p.id] ?? [],
 }));
 
-export const STATS = [
-  { value: 40, suffix: '+', label: 'Запущенных проектов' },
-  { value: 98, suffix: '%', label: 'Клиентов возвращаются к нам' },
-  { value: 14, suffix: ' дн', label: 'Средний срок запуска MVP' },
-  { value: 3.2, suffix: '×', decimals: 1, label: 'Средний рост конверсии' },
-];
-
 export const STEPS = [
   {
     index: '01',

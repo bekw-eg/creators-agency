@@ -1,67 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   AnimatePresence,
-  animate,
   motion,
-  useInView,
   useMotionValueEvent,
   useScroll,
   useSpring,
 } from 'framer-motion';
-import { STATS, STEPS } from '../data/content';
+import { STEPS } from '../data/content';
 import MaskLines from '../components/ui/MaskLines';
 import SectionLabel from '../components/ui/SectionLabel';
 
 const EASE = [0.16, 1, 0.3, 1];
-
-/** Счётчик: анимируется от 0 при первом попадании в область видимости. Пишет напрямую в DOM (без ре-рендеров). */
-function Counter({ value, suffix = '', decimals = 0 }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '0px 0px -15% 0px' });
-
-  useEffect(() => {
-    if (!inView) return undefined;
-    const controls = animate(0, value, {
-      duration: 2.2,
-      ease: EASE,
-      onUpdate: (v) => {
-        if (ref.current) ref.current.textContent = v.toFixed(decimals).replace('.', ',');
-      },
-    });
-    return () => controls.stop();
-  }, [inView, value, decimals]);
-
-  return (
-    <span className="tabular-nums">
-      <span ref={ref}>{(0).toFixed(decimals).replace('.', ',')}</span>
-      <span className="text-acid">{suffix}</span>
-    </span>
-  );
-}
-
-function Stats() {
-  return (
-    <dl className="mt-16 grid grid-cols-2 border-t border-white/10 md:mt-24 lg:grid-cols-4">
-      {STATS.map((s, i) => (
-        <motion.div
-          key={s.label}
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.9, ease: EASE, delay: i * 0.08 }}
-          className={`flex flex-col border-b border-white/10 py-8 pr-4 md:py-12 ${i % 2 ? 'pl-4 md:pl-8' : ''} ${
-            i > 0 ? 'lg:border-l lg:pl-8' : ''
-          } ${i % 2 ? 'border-l' : ''}`}
-        >
-          <dt className="order-2 mt-3 text-sm text-white/50">{s.label}</dt>
-          <dd className="font-grotesk text-[clamp(2.75rem,7vw,6.5rem)] font-semibold leading-none tracking-[-0.06em]">
-            <Counter value={s.value} suffix={s.suffix} decimals={s.decimals} />
-          </dd>
-        </motion.div>
-      ))}
-    </dl>
-  );
-}
 
 function Steps() {
   const listRef = useRef(null);
@@ -77,7 +26,7 @@ function Steps() {
   const current = STEPS[Math.max(active, 0)];
 
   return (
-    <div className="mt-24 grid gap-12 md:mt-32 lg:grid-cols-12">
+    <div className="mt-16 grid gap-12 border-t border-white/10 pt-16 md:mt-24 md:pt-24 lg:grid-cols-12">
       <div className="hidden lg:col-span-4 lg:block">
         <div className="sticky top-32">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/40">Текущий этап</p>
@@ -150,12 +99,11 @@ export default function Process() {
   return (
     <section id="process" className="relative py-24 md:py-40">
       <div className="container-x">
-        <SectionLabel index="03" label="Процесс и цифры" className="mb-6" />
+        <SectionLabel index="03" label="Процесс работы" className="mb-6" />
         <MaskLines
-          lines={['Прозрачный процесс,', <span className="text-white/35">измеримый результат</span>]}
+          lines={['Прозрачный процесс,', <span className="text-white/35">предсказуемый результат</span>]}
           className="font-grotesk text-[clamp(2.4rem,6.5vw,6.5rem)] font-semibold leading-[0.95] tracking-[-0.055em]"
         />
-        <Stats />
         <Steps />
       </div>
     </section>
